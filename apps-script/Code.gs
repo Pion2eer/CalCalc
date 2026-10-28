@@ -85,6 +85,19 @@ function selfTest() {
   log_('selftest', '', a.ok ? 'ок: ' + a.title + ', ' + a.kcal + ' ккал' : 'ошибка: ' + a.error, Date.now() - t0);
 }
 
+/** Run by hand from the editor after a prompt change: a few known foods, results go to the journal. */
+function testAi() {
+  var pc = pc_();
+  ['Водка 200 мл', 'Водка 200 мл\nУточнение: Какая крепость водки? — 40%', 'Суп томям с курицей тарелка',
+    'Кусочек белого хлеба, пюре 200 г и две сосиски', 'Половину круассана сладкого с кремом и две кружки растворимого кофе',
+    'гречка 300 г'].forEach(function (t) {
+    var t0 = Date.now();
+    var a = askPc_(pc, t);
+    log_('test', '', t + ' → ' + (a.ok ? a.title + ', ' + a.kcal + ' ккал, Б' + a.protein + ' Ж' + a.fat + ' У' + a.carbs +
+      (a.question ? ', вопрос: ' + a.question : '') : 'ошибка: ' + a.error), Date.now() - t0);
+  });
+}
+
 function clientLog_(b) {
   var email = caller_(b.accessToken) || '?';
   log_('app', email, b.message);
@@ -140,15 +153,17 @@ function allowed_(email) {
   return email === owner || list.indexOf('*') >= 0 || list.indexOf(email) >= 0;
 }
 
+// A small model is bad at multiplying in its head: it gives grams and kcal per 100 g for each item, the script does the sums
 var PROMPT =
-  'Ты нутрициолог. Пользователь пишет, что съел. Оцени калорийность и БЖУ всей записи целиком.\n' +
-  'Если порция не указана, бери типичную порцию. Используй известные данные о продуктах и блюдах.\n' +
+  'Ты нутрициолог. Пользователь пишет, что съел или выпил. Разбери запись на продукты.\n' +
+  'Для каждого продукта оцени вес в граммах (для напитков мл ≈ г) и калорийность и БЖУ на 100 г по известным справочным данным.\n' +
+  'Если порция не указана, бери типичную порцию. Алкоголь: этанол 7 ккал на грамм, водка 40% — 235 ккал на 100 мл.\n' +
   'Задай ОДИН уточняющий вопрос, только если ответ меняет калорийность больше чем на 30% ' +
   '(например, размер порции, жирность, с сахаром или без). Дай 2-4 коротких варианта ответа.\n' +
   'Если в записи уже есть строка «Уточнение», вопросов больше не задавай.\n' +
   'Ответь только JSON без пояснений:\n' +
-  '{"title":"короткое название, по-русски","kcal":целое,"protein":г,"fat":г,"carbs":г,' +
-  '"question":"вопрос или пустая строка","options":["вариант",...]}';
+  '{"title":"короткое название, по-русски","items":[{"name":"продукт","grams":число,"kcal100":число,' +
+  '"protein100":число,"fat100":число,"carbs100":число}],"question":"вопрос или пустая строка","options":["вариант",...]}';
 
 function parse_(b) {
   var email = caller_(b.accessToken);
@@ -184,7 +199,7 @@ function askPc_(pc, text) {
       payload: JSON.stringify({
         // gemma4 thinks before answering unless told not to; with thinking a short answer took minutes
         model: pc.model, stream: false, format: 'json', think: false, keep_alive: '24h',
-        options: { temperature: 0.2, num_predict: 300 },
+        options: { temperature: 0.2, num_predict: 500 },
         messages: [{ role: 'system', content: PROMPT }, { role: 'user', content: text }],
       }),
     });
@@ -200,6 +215,12 @@ function askPc_(pc, text) {
     a = JSON.parse(msg.slice(msg.indexOf('{'), msg.lastIndexOf('}') + 1));
   } catch (x) {
     return { ok: false, error: 'ИИ ответил непонятно: ' + r.getContentText().slice(0, 150) };
+  }
+  if (Array.isArray(a.items) && a.items.length) {
+    var sum = function (k) {
+      return a.items.reduce(function (t, it) { return t + (Number(it.grams) || 0) * (Number(it[k]) || 0) / 100; }, 0);
+    };
+    a.kcal = sum('kcal100'); a.protein = sum('protein100'); a.fat = sum('fat100'); a.carbs = sum('carbs100');
   }
   var kcal = Math.round(Number(a.kcal));
   if (!isFinite(kcal) || kcal < 0 || kcal > 10000) return { ok: false, error: 'ИИ не смог оценить' };
