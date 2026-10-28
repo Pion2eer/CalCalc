@@ -37,6 +37,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
         var again = false
         if (prefs.aiUrl.isNotBlank()) {
+            db.entries().requeueNullQuestions()
             for (e in db.entries().forAi()) {
                 val a = try {
                     Ai.parse(prefs.aiUrl, token, aiText(e), weight)

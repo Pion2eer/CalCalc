@@ -142,15 +142,17 @@ object Ai {
         val body = JSONObject().put("action", "parse").put("accessToken", token).put("text", text).put("weightKg", weightKg)
         val j = JSONObject(Script.post(url, body.toString()))
         fun d(k: String) = if (j.has(k) && !j.isNull(k)) j.getDouble(k) else null
+        // optString turns a JSON null into the text "null", which once showed up as the AI's question
+        fun s(k: String) = if (j.has(k) && !j.isNull(k)) j.getString(k).ifBlank { null } else null
         val opts = j.optJSONArray("options")
         return Answer(
             ok = j.optBoolean("ok"),
             retry = j.optBoolean("retry"),
-            error = j.optString("error").ifEmpty { null },
-            title = j.optString("title").ifEmpty { null },
+            error = s("error"),
+            title = s("title"),
             kcal = if (j.has("kcal") && !j.isNull("kcal")) j.getInt("kcal") else null,
             protein = d("protein"), fat = d("fat"), carbs = d("carbs"),
-            question = j.optString("question").ifEmpty { null },
+            question = s("question"),
             options = if (opts == null) emptyList() else (0 until opts.length()).map { opts.getString(it) },
         )
     }
