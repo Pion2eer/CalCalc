@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
   workflow_dispatch:
 
@@ -33,8 +33,14 @@ jobs:
             echo "::warning::KEYSTORE_BASE64 secret is not set: the APK is signed with a throwaway debug key and cannot update an installed app"
           fi
 
-      - name: Unit tests
-        run: ./gradlew --no-daemon testReleaseUnitTest
+      - name: Unit tests and screenshots
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-${{ github.run_number }}
+          path: app/build/outputs/roborazzi/
 
       - name: Build
         env:

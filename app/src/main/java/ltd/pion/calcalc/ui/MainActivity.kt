@@ -8,6 +8,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
@@ -79,7 +81,8 @@ fun Root(vm: AppViewModel) {
             }
         },
     ) { pad ->
-        val m = Modifier.padding(pad)
+        // the bottom bar already covers the navigation bar, so the keyboard only adds what it takes beyond it
+        val m = Modifier.padding(pad).consumeWindowInsets(pad).imePadding()
         when (tab) {
             0 -> TodayScreen(vm, m)
             1 -> DiaryScreen(vm, m)

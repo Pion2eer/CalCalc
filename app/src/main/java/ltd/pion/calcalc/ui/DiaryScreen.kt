@@ -34,11 +34,15 @@ private val shortFmt = DateTimeFormatter.ofPattern("d MMM, EE", Locale("ru"))
 fun DiaryScreen(vm: AppViewModel, modifier: Modifier) {
     val totals by vm.totals.collectAsState()
     val s by vm.summary.collectAsState()
-    val norm = s.norm
+    DiaryContent(totals, s.norm, LocalDate.now(), modifier)
+}
+
+@Composable
+fun DiaryContent(totals: List<DayTotal>, norm: Int, today: LocalDate, modifier: Modifier = Modifier) {
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         item {
             Text("Последние 14 дней", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 12.dp))
-            WeekChart(totals, norm)
+            WeekChart(totals, norm, today)
             Text(
                 "Столбик: съедено. Пунктир: норма. Оранжевым: сожжено сверх нормы.",
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -77,9 +81,9 @@ private fun androidx.compose.foundation.layout.RowScope.Cell(text: String, weigh
 }
 
 @Composable
-private fun WeekChart(totals: List<DayTotal>, norm: Int) {
+private fun WeekChart(totals: List<DayTotal>, norm: Int, today: LocalDate) {
     val byDay = totals.associateBy { it.day }
-    val days = (13 downTo 0).map { LocalDate.now().minusDays(it.toLong()).toString() }
+    val days = (13 downTo 0).map { today.minusDays(it.toLong()).toString() }
     val maxV = (days.maxOf { (byDay[it]?.eaten ?: 0).coerceAtLeast(norm + (byDay[it]?.burned ?: 0)) }).coerceAtLeast(1) * 1.1f
     val bar = MaterialTheme.colorScheme.primary
     val grid = MaterialTheme.colorScheme.onSurfaceVariant

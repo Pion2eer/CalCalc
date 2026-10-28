@@ -46,20 +46,54 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
     val p0 by vm.profile.collectAsState()
     val w0 by vm.weight.collectAsState()
     val update by vm.update.collectAsState()
+    val account by vm.account.collectAsState()
+    val authError by vm.authError.collectAsState()
+    val ctx = LocalContext.current
+    val signInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+        vm.onSignInResult(it.data)
+    }
+    ProfileContent(
+        p0 = p0, w0 = w0, update = update, account = account, authError = authError,
+        sheetUrl = vm.sheetUrl(), aiUrl = vm.prefs.aiUrl, autoDownload = vm.prefs.autoDownloadOnWifi,
+        versionName = BuildConfig.VERSION_NAME,
+        onSave = { p, kg -> vm.saveProfile(p, kg); onSaved() },
+        onSignIn = { vm.signIn { pi -> signInLauncher.launch(IntentSenderRequest.Builder(pi.intentSender).build()) } },
+        onOpenSheet = { u -> ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) },
+        onSync = vm::syncNow, onSignOut = vm::signOut,
+        onAiUrl = { vm.prefs.aiUrl = it }, onAutoDownload = { vm.prefs.autoDownloadOnWifi = it },
+        onCheckUpdate = { vm.checkUpdate() }, onUpdate = vm::downloadAndInstall, modifier = modifier,
+    )
+}
 
+@Composable
+fun ProfileContent(
+    p0: Profile,
+    w0: Double,
+    update: UpdateState,
+    account: String?,
+    authError: String?,
+    sheetUrl: String?,
+    aiUrl: String,
+    autoDownload: Boolean,
+    versionName: String,
+    onSave: (Profile, Double?) -> Unit,
+    onSignIn: () -> Unit,
+    onOpenSheet: (String) -> Unit,
+    onSync: () -> Unit,
+    onSignOut: () -> Unit,
+    onAiUrl: (String) -> Unit,
+    onAutoDownload: (Boolean) -> Unit,
+    onCheckUpdate: () -> Unit,
+    onUpdate: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var male by remember(p0) { mutableStateOf(p0.male) }
     var year by remember(p0) { mutableStateOf(p0.birthYear.toString()) }
     var height by remember(p0) { mutableStateOf(p0.heightCm.toString()) }
     var goal by remember(p0) { mutableStateOf(p0.goal) }
     var weight by remember(w0) { mutableStateOf(trimKg(w0)) }
-    val account by vm.account.collectAsState()
-    val authError by vm.authError.collectAsState()
-    var url by remember { mutableStateOf(vm.prefs.aiUrl) }
-    val ctx = LocalContext.current
-    val signInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
-        vm.onSignInResult(it.data)
-    }
-    var autoDl by remember { mutableStateOf(vm.prefs.autoDownloadOnWifi) }
+    var url by remember { mutableStateOf(aiUrl) }
+    var autoDl by remember { mutableStateOf(autoDownload) }
 
     val draft = Profile(male, year.toIntOrNull() ?: p0.birthYear, height.toIntOrNull() ?: p0.heightCm, goal)
     val kg = weight.replace(',', '.').toDoubleOrNull()
@@ -85,7 +119,7 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
             "Норма: ${Norm.daily(draft, kg ?: w0)} ккал в день, тренировки добавляются к ней.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Button({ vm.saveProfile(draft, kg); onSaved() }, Modifier.fillMaxWidth()) { Text("Сохранить") }
+        Button({ onSave(draft, kg) }, Modifier.fillMaxWidth()) { Text("Сохранить") }
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Text("Аккаунт Google", style = MaterialTheme.typography.titleMedium)
@@ -94,39 +128,37 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
                 "Войдите, чтобы ИИ считал калории еды, а дневник сохранялся в вашу таблицу на Google Диске.",
                 fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Button({
-                vm.signIn { pi -> signInLauncher.launch(IntentSenderRequest.Builder(pi.intentSender).build()) }
-            }, Modifier.fillMaxWidth()) { Text("Войти через Google") }
+            Button(onSignIn, Modifier.fillMaxWidth()) { Text("Войти через Google") }
         } else {
             Text("Вы вошли как $account")
-            vm.sheetUrl()?.let { u ->
-                OutlinedButton({ ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) }, Modifier.fillMaxWidth()) {
+            sheetUrl?.let { u ->
+                OutlinedButton({ onOpenSheet(u) }, Modifier.fillMaxWidth()) {
                     Text("Открыть мою таблицу")
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton({ vm.syncNow() }, Modifier.weight(1f)) { Text("Синхронизировать") }
-                OutlinedButton({ vm.signOut() }, Modifier.weight(1f)) { Text("Выйти") }
+                OutlinedButton(onSync, Modifier.weight(1f)) { Text("Синхронизировать") }
+                OutlinedButton(onSignOut, Modifier.weight(1f)) { Text("Выйти") }
             }
         }
         authError?.let { Text(it, color = Warn) }
         OutlinedTextField(
-            url, { url = it; vm.prefs.aiUrl = it }, Modifier.fillMaxWidth(),
+            url, { url = it; onAiUrl(it) }, Modifier.fillMaxWidth(),
             label = { Text("Адрес ИИ-скрипта (…/exec)") }, singleLine = true,
             supportingText = { Text("Обычно уже заполнен, менять не нужно") },
         )
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Text("Обновления", style = MaterialTheme.typography.titleMedium)
-        Text("Установлена версия ${BuildConfig.VERSION_NAME}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Установлена версия $versionName", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Скачивать автоматически по Wi-Fi", Modifier.weight(1f))
-            Switch(autoDl, { autoDl = it; vm.prefs.autoDownloadOnWifi = it })
+            Switch(autoDl, { autoDl = it; onAutoDownload(it) })
         }
         when (val u = update) {
-            is UpdateState.Available, is UpdateState.ReadyToInstall, is UpdateState.Downloading -> UpdateBanner(u, vm::downloadAndInstall)
+            is UpdateState.Available, is UpdateState.ReadyToInstall, is UpdateState.Downloading -> UpdateBanner(u, onUpdate)
             else -> {
-                Button({ vm.checkUpdate() }, Modifier.fillMaxWidth(), enabled = u !is UpdateState.Checking) {
+                Button(onCheckUpdate, Modifier.fillMaxWidth(), enabled = u !is UpdateState.Checking) {
                     Text(if (u is UpdateState.Checking) "Проверяю…" else "Проверить обновления")
                 }
                 when (u) {
