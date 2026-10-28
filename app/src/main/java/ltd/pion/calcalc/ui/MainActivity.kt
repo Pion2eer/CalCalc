@@ -63,7 +63,15 @@ fun CalCalcTheme(content: @Composable () -> Unit) {
             background = Color(0xFF101214),
             surface = Color(0xFF101214),
             surfaceVariant = Color(0xFF1C1F22),
+            onSurfaceVariant = Color(0xFFA9B0B6),
             secondary = Burn,
+            // selected chips and switches: a quiet green instead of Material's default purple
+            secondaryContainer = Color(0xFF1E3B2B),
+            onSecondaryContainer = Color(0xFFB8F5CF),
+            outline = Color(0xFF3A4046),
+            outlineVariant = Color(0xFF2A2F33),
+            surfaceContainerHigh = Color(0xFF22262A),
+            surfaceContainerHighest = Color(0xFF2A2E33),
         ),
         content = content,
     )

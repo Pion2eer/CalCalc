@@ -8,7 +8,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.isDialog
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
+import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import ltd.pion.calcalc.data.DayTotal
 import ltd.pion.calcalc.data.Entry
@@ -92,9 +94,10 @@ class ScreenshotTest {
     @Config(qualifiers = "w406dp-h430dp-xxhdpi")
     fun today_keyboard_open() = shot("05_today_keyboard_open") { today(entries, summary, input = "овсянка") }
 
-    @Test fun entry_dialog() = shot("06_entry_dialog") {
-        Box(Modifier.fillMaxSize()) { today(entries, summary) }
-        EntryDialog(entries[2], {}, {}, {})
+    @Test fun entry_dialog() {
+        compose.setContent { CalCalcTheme { EntryDialog(entries[2], {}, {}, {}) } }
+        // a dialog is its own window: capture just that node
+        compose.onNode(isDialog()).captureRoboImage("build/outputs/roborazzi/06_entry_dialog.png")
     }
 
     @Test fun diary() = shot("07_diary") {

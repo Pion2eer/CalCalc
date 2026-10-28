@@ -36,12 +36,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -193,13 +193,13 @@ private fun SummaryCard(s: DaySummary, entries: List<Entry>) {
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
-        Column(Modifier.padding(vertical = 18.dp, horizontal = 12.dp)) {
+        Column(Modifier.padding(vertical = 16.dp, horizontal = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SideStat("Съедено", s.eaten, MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
                 Ring(s)
                 SideStat("Сожжено", s.burned, Burn, Modifier.weight(1f))
             }
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
             val p = entries.sumOf { it.protein ?: 0.0 }
             val f = entries.sumOf { it.fat ?: 0.0 }
             val c = entries.sumOf { it.carbs ?: 0.0 }
@@ -236,7 +236,7 @@ private fun Ring(s: DaySummary) {
     val frac = (s.eaten.toFloat() / budget).coerceIn(0f, 1f)
     val over = s.left < 0
     val track = MaterialTheme.colorScheme.background
-    Box(Modifier.size(150.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(140.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val w = 12.dp.toPx()
             val box = Size(size.width - w, size.height - w)
@@ -333,11 +333,25 @@ private fun QuestionCard(e: Entry, onAnswer: (String) -> Unit, onOpen: () -> Uni
             Text(e.question.orEmpty(), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 2.dp, bottom = 10.dp))
             val opts = remember(e.options) { parseOptions(e.options) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                opts.forEach { o -> Button({ onAnswer(o) }) { Text(o) } }
-                OutlinedButton({ onAnswer("Не знаю, оцени сам") }) { Text("Не знаю") }
-                TextButton(onOpen) { Text("Ввести ккал") }
+                opts.forEach { o -> AnswerChip(o, primary = true) { onAnswer(o) } }
+                AnswerChip("Не знаю", primary = false) { onAnswer("Не знаю, оцени сам") }
+                AnswerChip("Ввести ккал", primary = false, onClick = onOpen)
             }
         }
+    }
+}
+
+@Composable
+private fun AnswerChip(text: String, primary: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick, shape = RoundedCornerShape(50),
+        color = if (primary) Accent.copy(alpha = 0.18f) else Color.Transparent,
+        border = if (primary) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Text(
+            text, Modifier.heightIn(min = 40.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+            color = if (primary) Accent else MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+        )
     }
 }
 
@@ -356,8 +370,10 @@ private fun EmptyHint() {
 
 @Composable
 private fun InputBar(input: String, onInput: (String) -> Unit, onSend: () -> Unit, onQuick: (String) -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp, shadowElevation = 8.dp) {
-        Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp)) {
+    Surface(color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            Spacer(Modifier.height(8.dp))
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(QuickAdds) { q ->
                     Surface(
@@ -408,7 +424,8 @@ fun mealGroups(entries: List<Entry>): List<Pair<String, List<Entry>>> {
         }
     }
     val order = listOf("Завтрак", "Обед", "Ужин", "Перекусы", "Активность")
-    return entries.sortedBy { it.createdAt }.groupBy(::meal).toList().sortedBy { order.indexOf(it.first) }
+    // entries waiting for an answer sit in their own card above
+    return entries.filter { it.status != EntryStatus.NEEDS_ANSWER }.sortedBy { it.createdAt }.groupBy(::meal).toList().sortedBy { order.indexOf(it.first) }
 }
 
 private fun kcalText(k: Int) = if (k < 0) "−${-k} ккал" else "$k ккал"

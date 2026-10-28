@@ -6,6 +6,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,7 +23,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -94,81 +98,108 @@ fun ProfileContent(
     var weight by remember(w0) { mutableStateOf(trimKg(w0)) }
     var url by remember { mutableStateOf(aiUrl) }
     var autoDl by remember { mutableStateOf(autoDownload) }
+    var advanced by remember { mutableStateOf(false) }
 
     val draft = Profile(male, year.toIntOrNull() ?: p0.birthYear, height.toIntOrNull() ?: p0.heightCm, goal)
     val kg = weight.replace(',', '.').toDoubleOrNull()
+    val changed = draft != p0 || (kg != null && kg != w0)
 
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Профиль", style = MaterialTheme.typography.titleLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(male, { male = true }, { Text("Мужчина") })
-            FilterChip(!male, { male = false }, { Text("Женщина") })
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            NumberField("Год рождения", year, Modifier.weight(1f)) { year = it }
-            NumberField("Рост, см", height, Modifier.weight(1f)) { height = it }
-            NumberField("Вес, кг", weight, Modifier.weight(1f), decimal = true) { weight = it }
-        }
-        Text("Цель")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(goal == -1, { goal = -1 }, { Text("Похудеть") })
-            FilterChip(goal == 0, { goal = 0 }, { Text("Держать") })
-            FilterChip(goal == 1, { goal = 1 }, { Text("Набрать") })
-        }
-        Text(
-            "Норма: ${Norm.daily(draft, kg ?: w0)} ккал в день, тренировки добавляются к ней.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Button({ onSave(draft, kg) }, Modifier.fillMaxWidth()) { Text("Сохранить") }
+    Column(
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Профиль", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
 
-        HorizontalDivider(Modifier.padding(vertical = 8.dp))
-        Text("Аккаунт Google", style = MaterialTheme.typography.titleMedium)
-        if (account == null) {
-            Text(
-                "Войдите, чтобы ИИ считал калории еды, а дневник сохранялся в вашу таблицу на Google Диске.",
-                fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Button(onSignIn, Modifier.fillMaxWidth()) { Text("Войти через Google") }
-        } else {
-            Text("Вы вошли как $account")
-            sheetUrl?.let { u ->
-                OutlinedButton({ onOpenSheet(u) }, Modifier.fillMaxWidth()) {
-                    Text("Открыть мою таблицу")
-                }
+        Section("О себе") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(male, { male = true }, { Text("Мужчина") })
+                FilterChip(!male, { male = false }, { Text("Женщина") })
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onSync, Modifier.weight(1f)) { Text("Синхронизировать") }
-                OutlinedButton(onSignOut, Modifier.weight(1f)) { Text("Выйти") }
+                NumberField("Год рождения", year, Modifier.weight(1f)) { year = it }
+                NumberField("Рост, см", height, Modifier.weight(1f)) { height = it }
+                NumberField("Вес, кг", weight, Modifier.weight(1f), decimal = true) { weight = it }
+            }
+            Text("Цель", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(goal == -1, { goal = -1 }, { Text("Похудеть") })
+                FilterChip(goal == 0, { goal = 0 }, { Text("Держать") })
+                FilterChip(goal == 1, { goal = 1 }, { Text("Набрать") })
+            }
+            Row(
+                Modifier.fillMaxWidth().background(Accent.copy(alpha = 0.10f), RoundedCornerShape(14.dp)).padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Ваша норма", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${Norm.daily(draft, kg ?: w0)} ккал в день", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Accent)
+                    Text("Тренировки добавляются к ней", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Button({ onSave(draft, kg) }, Modifier.fillMaxWidth().height(48.dp), enabled = changed) {
+                Text(if (changed) "Сохранить" else "Сохранено")
             }
         }
-        authError?.let { Text(it, color = Warn) }
-        OutlinedTextField(
+
+        Section("Аккаунт Google") {
+            if (account == null) {
+                Text(
+                    "Войдите, чтобы ИИ считал калории еды, а дневник сохранялся в вашу таблицу на Google Диске.",
+                    fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onSignIn, Modifier.fillMaxWidth().height(48.dp)) { Text("Войти через Google") }
+            } else {
+                Text("Вы вошли как", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(account, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                sheetUrl?.let { u ->
+                    OutlinedButton({ onOpenSheet(u) }, Modifier.fillMaxWidth()) { Text("Открыть мою таблицу") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onSync, Modifier.weight(1f)) { Text("Синхронизировать") }
+                    TextButton(onSignOut, Modifier.weight(1f)) { Text("Выйти") }
+                }
+            }
+            authError?.let { Text(it, color = Warn, fontSize = 13.sp) }
+        }
+
+        Section("Обновления") {
+            Text("Установлена версия $versionName", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Скачивать автоматически по Wi-Fi", Modifier.weight(1f), fontSize = 15.sp)
+                Switch(autoDl, { autoDl = it; onAutoDownload(it) })
+            }
+            when (val u = update) {
+                is UpdateState.Available, is UpdateState.ReadyToInstall, is UpdateState.Downloading -> UpdateBanner(u, onUpdate)
+                else -> {
+                    OutlinedButton(onCheckUpdate, Modifier.fillMaxWidth(), enabled = u !is UpdateState.Checking) {
+                        Text(if (u is UpdateState.Checking) "Проверяю…" else "Проверить обновления")
+                    }
+                    when (u) {
+                        is UpdateState.UpToDate -> Text("У вас последняя версия", color = Accent, fontSize = 13.sp)
+                        is UpdateState.Error -> Text(u.message, color = Warn, fontSize = 13.sp)
+                        else -> {}
+                    }
+                }
+            }
+        }
+
+        TextButton({ advanced = !advanced }) { Text(if (advanced) "Скрыть дополнительное" else "Дополнительно") }
+        if (advanced) OutlinedTextField(
             url, { url = it; onAiUrl(it) }, Modifier.fillMaxWidth(),
             label = { Text("Адрес ИИ-скрипта (…/exec)") }, singleLine = true,
             supportingText = { Text("Обычно уже заполнен, менять не нужно") },
         )
+        Spacer(Modifier.height(16.dp))
+    }
+}
 
-        HorizontalDivider(Modifier.padding(vertical = 8.dp))
-        Text("Обновления", style = MaterialTheme.typography.titleMedium)
-        Text("Установлена версия $versionName", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Скачивать автоматически по Wi-Fi", Modifier.weight(1f))
-            Switch(autoDl, { autoDl = it; onAutoDownload(it) })
+@Composable
+private fun Section(title: String, content: @Composable () -> Unit) {
+    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            content()
         }
-        when (val u = update) {
-            is UpdateState.Available, is UpdateState.ReadyToInstall, is UpdateState.Downloading -> UpdateBanner(u, onUpdate)
-            else -> {
-                Button(onCheckUpdate, Modifier.fillMaxWidth(), enabled = u !is UpdateState.Checking) {
-                    Text(if (u is UpdateState.Checking) "Проверяю…" else "Проверить обновления")
-                }
-                when (u) {
-                    is UpdateState.UpToDate -> Text("У вас последняя версия", color = Accent)
-                    is UpdateState.Error -> Text(u.message, color = Warn)
-                    else -> {}
-                }
-            }
-        }
-        Spacer(Modifier.height(24.dp))
     }
 }
 
