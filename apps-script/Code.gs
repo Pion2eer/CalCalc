@@ -73,6 +73,7 @@ function ensureTrigger_() {
 
 /** Asks the PC about a known food and writes how it went; run by the trigger, or by hand from the editor. */
 function selfTest() {
+  logSheet_(); // outside log_'s try, so a missing permission shows up in the editor instead of failing silently
   ensureTrigger_();
   var pc = pc_();
   if (!pc) return log_('selftest', '', 'ПК ни разу не регистрировался');
@@ -181,7 +182,9 @@ function askPc_(pc, text) {
       method: 'post', contentType: 'application/json', muteHttpExceptions: true,
       headers: { Authorization: 'Bearer ' + pc.token },
       payload: JSON.stringify({
-        model: pc.model, stream: false, format: 'json', options: { temperature: 0.2 },
+        // gemma4 thinks before answering unless told not to; with thinking a short answer took minutes
+        model: pc.model, stream: false, format: 'json', think: false, keep_alive: '24h',
+        options: { temperature: 0.2, num_predict: 300 },
         messages: [{ role: 'system', content: PROMPT }, { role: 'user', content: text }],
       }),
     });
