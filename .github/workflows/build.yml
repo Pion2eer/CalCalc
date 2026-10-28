@@ -42,6 +42,17 @@ jobs:
           name: screenshots-${{ github.run_number }}
           path: app/build/outputs/roborazzi/
 
+      # the pictures also go to a branch screenshots/<branch>, so they can be fetched with plain git
+      - name: Publish screenshots
+        if: always() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls app/build/outputs/roborazzi/*.png >/dev/null 2>&1 || exit 0
+          d=$(mktemp -d); cp app/build/outputs/roborazzi/*.png "$d"/; cd "$d"
+          git init -q -b shots && git add . && git -c user.name=ci -c user.email=ci@localhost commit -qm "screenshots ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "shots:refs/heads/screenshots/${GITHUB_REF_NAME}"
+
       - name: Build
         env:
           BUILD_NUMBER: ${{ github.run_number }}

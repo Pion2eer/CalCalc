@@ -29,7 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.DirectionsRun
+import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.AlertDialog
@@ -288,7 +288,7 @@ private fun EntryRow(e: Entry, onClick: () -> Unit) {
         ) {
             Icon(
                 when {
-                    activity -> Icons.Filled.DirectionsRun
+                    activity -> Icons.AutoMirrored.Filled.DirectionsRun
                     e.type == EntryType.MANUAL -> Icons.Filled.Edit
                     else -> Icons.Filled.Restaurant
                 },

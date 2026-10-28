@@ -62,13 +62,15 @@ class ScreenshotTest {
     private val release = Release(5, "0.1.5", "", "", "Новый экран «Сегодня»")
 
     private fun shot(name: String, content: @Composable () -> Unit) {
+        // spinners never stop, so time is moved by hand instead of waiting for the screen to settle
+        compose.mainClock.autoAdvance = false
         compose.setContent {
             CalCalcTheme {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { content() }
             }
         }
         // the whole screen, so dialogs (their own window) are in the picture too
-        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(500)
         captureScreenRoboImage("build/outputs/roborazzi/$name.png")
     }
 
