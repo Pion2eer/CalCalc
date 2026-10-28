@@ -90,10 +90,11 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
     val entries by vm.entries.collectAsState()
     val s by vm.summary.collectAsState()
     val update by vm.update.collectAsState()
+    val blocker by vm.aiBlocker.collectAsState()
     var editing by remember { mutableStateOf<Entry?>(null) }
 
     TodayContent(
-        day = day, today = LocalDate.now(), entries = entries, s = s, update = update,
+        day = day, today = LocalDate.now(), entries = entries, s = s, update = update, aiBlocker = blocker,
         onShiftDay = vm::shiftDay, onAdd = vm::add, onOpen = { editing = it },
         onAnswer = { e, o -> vm.answer(e, o) }, onUpdate = vm::downloadAndInstall, modifier = modifier,
     )
@@ -115,6 +116,7 @@ fun TodayContent(
     entries: List<Entry>,
     s: DaySummary,
     update: UpdateState,
+    aiBlocker: String?,
     onShiftDay: (Long) -> Unit,
     onAdd: (String) -> Unit,
     onOpen: (Entry) -> Unit,
@@ -135,7 +137,7 @@ fun TodayContent(
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(bottom = 12.dp)) {
             item { UpdateBanner(update, onUpdate) }
             item { DayHeader(day, today, onShiftDay) }
-            item { SummaryCard(s, entries) }
+            item { SummaryCard(s, entries, aiBlocker) }
 
             val ask = entries.filter { it.status == EntryStatus.NEEDS_ANSWER && it.question != null }
             if (ask.isNotEmpty()) {
@@ -153,7 +155,7 @@ fun TodayContent(
                             Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                             shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface,
                         ) {
-                            Column { list.forEach { EntryRow(it, onClick = { onOpen(it) }) } }
+                            Column { list.forEach { EntryRow(it, waiting = aiBlocker != null, onClick = { onOpen(it) }) } }
                         }
                     }
                 }
@@ -188,7 +190,7 @@ private fun DayHeader(day: LocalDate, today: LocalDate, onShiftDay: (Long) -> Un
 }
 
 @Composable
-private fun SummaryCard(s: DaySummary, entries: List<Entry>) {
+private fun SummaryCard(s: DaySummary, entries: List<Entry>, aiBlocker: String?) {
     Surface(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface,
@@ -214,9 +216,16 @@ private fun SummaryCard(s: DaySummary, entries: List<Entry>) {
                 Modifier.fillMaxWidth().padding(top = 14.dp),
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
             ) {
-                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Warn)
-                Spacer(Modifier.width(8.dp))
-                Text("ИИ считает: ${s.pending} ${plural(s.pending, "запись", "записи", "записей")}", color = Warn, fontSize = 13.sp)
+                if (aiBlocker == null) {
+                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Warn)
+                    Spacer(Modifier.width(8.dp))
+                    Text("ИИ считает: ${s.pending} ${plural(s.pending, "запись", "записи", "записей")}", color = Warn, fontSize = 13.sp)
+                } else {
+                    Text(
+                        "Ждут ИИ: ${s.pending}. $aiBlocker", color = Warn, fontSize = 13.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
             }
         }
     }
@@ -275,7 +284,7 @@ private fun SectionTitle(name: String, kcal: Int?) {
 }
 
 @Composable
-private fun EntryRow(e: Entry, onClick: () -> Unit) {
+private fun EntryRow(e: Entry, waiting: Boolean, onClick: () -> Unit) {
     val k = e.kcal
     val activity = e.type == EntryType.ACTIVITY || (k != null && k < 0)
     Row(
@@ -301,6 +310,7 @@ private fun EntryRow(e: Entry, onClick: () -> Unit) {
             val (sub, warn) = when {
                 e.status == EntryStatus.NEEDS_ANSWER -> "Нужно уточнить" to true
                 e.status == EntryStatus.FAILED -> "ИИ не разобрал. Нажмите, чтобы ввести вручную" to true
+                k == null && waiting -> "Ждёт ИИ. Нажмите, чтобы ввести ккал вручную" to true
                 k == null -> "ИИ считает…" to true
                 e.protein != null -> "Б ${e.protein.toInt()} · Ж ${(e.fat ?: 0.0).toInt()} · У ${(e.carbs ?: 0.0).toInt()}" + (if (e.estimated) " · примерно" else "") to false
                 e.estimated -> "примерно" to false
@@ -309,7 +319,7 @@ private fun EntryRow(e: Entry, onClick: () -> Unit) {
             if (sub != null) Text(sub, color = if (warn) Warn else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
         }
         Spacer(Modifier.width(8.dp))
-        if (k == null && e.status != EntryStatus.FAILED) {
+        if (k == null && e.status != EntryStatus.FAILED && !waiting) {
             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Warn)
         } else {
             Text(

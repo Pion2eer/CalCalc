@@ -41,9 +41,17 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 val a = try {
                     Ai.parse(prefs.aiUrl, token, aiText(e), weight)
                 } catch (ex: Exception) {
+                    prefs.aiProblem = "Нет связи с ИИ, записи посчитаются позже"
                     again = true
                     break
                 }
+                prefs.aiProblem = when {
+                    a.retry -> a.error ?: "Компьютер с ИИ выключен, записи посчитаются позже"
+                    !a.ok && a.error != null && a.error.startsWith("Нет доступа") -> a.error
+                    else -> null
+                }
+                // no access is about the account, not this entry: keep it waiting
+                if (!a.ok && a.error != null && a.error.startsWith("Нет доступа")) break
                 // the entry may have been edited or deleted while the AI was thinking
                 val now = db.entries().byId(e.id) ?: continue
                 if (now.editedByUser) continue

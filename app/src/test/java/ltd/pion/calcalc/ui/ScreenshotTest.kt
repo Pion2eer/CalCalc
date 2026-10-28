@@ -75,12 +75,18 @@ class ScreenshotTest {
     }
 
     @Composable
-    private fun today(list: List<Entry>, s: DaySummary, update: UpdateState = UpdateState.Idle, input: String = "", day: LocalDate = today) =
-        TodayContent(day, today, list, s, update, {}, {}, {}, { _, _ -> }, {}, initialInput = input)
+    private fun today(
+        list: List<Entry>, s: DaySummary, update: UpdateState = UpdateState.Idle, input: String = "",
+        day: LocalDate = today, blocker: String? = null,
+    ) = TodayContent(day, today, list, s, update, blocker, {}, {}, {}, { _, _ -> }, {}, initialInput = input)
 
     @Test fun today_empty() = shot("01_today_empty") { today(emptyList(), DaySummary(2100, 0, 0, 0)) }
 
     @Test fun today_full() = shot("02_today_full") { today(entries, summary) }
+
+    @Test fun today_ai_not_ready() = shot("02b_today_ai_not_ready") {
+        today(entries, summary, blocker = "Войдите через Google в «Профиле», и ИИ посчитает еду")
+    }
 
     @Test fun today_typing() = shot("03_today_typing") { today(entries, summary, input = "гречка с курицей 300 г") }
 

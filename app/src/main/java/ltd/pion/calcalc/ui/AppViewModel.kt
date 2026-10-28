@@ -73,6 +73,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, DaySummary(2000, 0, 0, 0))
 
+    /** Shown instead of «ИИ считает» when food cannot be counted yet, with what to do about it. */
+    val aiBlocker: StateFlow<String?> = prefs.changes().map {
+        when {
+            prefs.accountEmail == null -> "Войдите через Google в «Профиле», и ИИ посчитает еду"
+            prefs.aiUrl.isBlank() -> "ИИ ещё не подключён, записи подождут"
+            else -> prefs.aiProblem
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val update: StateFlow<UpdateState> = _update.asStateFlow()
 

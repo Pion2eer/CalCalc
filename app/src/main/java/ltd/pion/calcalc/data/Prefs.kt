@@ -56,6 +56,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("autoDownloadOnWifi", true)
         set(v) = sp.edit().putBoolean("autoDownloadOnWifi", v).apply()
 
+    /** Why food is not being counted right now (PC off, no access…); null when the AI answered last time. */
+    var aiProblem: String?
+        get() = sp.getString("aiProblem", null)
+        set(v) = sp.edit().putString("aiProblem", v).apply()
+
     var profileDone: Boolean
         get() = sp.getBoolean("profileDone", false)
         set(v) = sp.edit().putBoolean("profileDone", v).apply()
