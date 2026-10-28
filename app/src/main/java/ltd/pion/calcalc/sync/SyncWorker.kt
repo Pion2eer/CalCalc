@@ -12,6 +12,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import ltd.pion.calcalc.data.AppDb
 import ltd.pion.calcalc.data.Entry
@@ -132,7 +133,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 .build()
             val wm = WorkManager.getInstance(context)
             val running = runCatching {
-                wm.getWorkInfosForUniqueWork("sync").get().any { it.state == WorkInfo.State.RUNNING }
+                runBlocking { wm.getWorkInfosForUniqueWorkFlow("sync").first() }.any { it.state == WorkInfo.State.RUNNING }
             }.getOrDefault(false)
             wm.enqueueUniqueWork("sync", if (running) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.REPLACE, req)
         }
