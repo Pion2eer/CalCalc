@@ -94,6 +94,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _steps = MutableStateFlow(StepsState.OFF)
     val steps: StateFlow<StepsState> = _steps.asStateFlow()
 
+    /** What Health Connect has for the shown day, so the profile can say whether steps arrive at all. */
+    private val _stepCount = MutableStateFlow<Long?>(null)
+    val stepCount: StateFlow<Long?> = _stepCount.asStateFlow()
+
     /**
      * Today's steps from Health Connect become one activity entry of the day, «Шаги: 8 400». Walking typed in by
      * hand is already inside those steps, so only the rest is added. An entry the user corrected is left alone.
@@ -104,6 +108,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (_steps.value != StepsState.ON) return@launch
         val day = _day.value
         val count = runCatching { Steps.count(ctx, day) }.getOrNull() ?: return@launch
+        _stepCount.value = count
         val id = "steps-$day"
         val old = db.entries().byId(id)
         if (old?.editedByUser == true || (old == null && count == 0L)) return@launch

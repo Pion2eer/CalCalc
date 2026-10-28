@@ -58,6 +58,7 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
     val authError by vm.authError.collectAsState()
     val ctx = LocalContext.current
     val steps by vm.steps.collectAsState()
+    val stepCount by vm.stepCount.collectAsState()
     val stepsLauncher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) {
         vm.refreshSteps()
     }
@@ -75,7 +76,7 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
         onSync = vm::syncNow, onSignOut = vm::signOut,
         onAiUrl = { vm.prefs.aiUrl = it }, onAutoDownload = { vm.prefs.autoDownloadOnWifi = it },
         onCheckUpdate = { vm.checkUpdate() }, onUpdate = vm::downloadAndInstall, modifier = modifier,
-        steps = steps,
+        steps = steps, stepCount = stepCount,
         onSteps = {
             if (steps == StepsState.NEEDS_INSTALL) ctx.startActivity(
                 Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${Steps.PROVIDER}&url=healthconnect%3A%2F%2Fonboarding"))
@@ -106,6 +107,7 @@ fun ProfileContent(
     onUpdate: () -> Unit,
     modifier: Modifier = Modifier,
     steps: StepsState = StepsState.OFF,
+    stepCount: Long? = null,
     onSteps: () -> Unit = {},
 ) {
     var male by remember(p0) { mutableStateOf(p0.male) }
@@ -182,6 +184,11 @@ fun ProfileContent(
                 Text(
                     "Подключено. Шаги из Google Fit и телефона каждый день попадают в «Сожжено».",
                     fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (stepCount != null) Text("Сегодня в Health Connect: $stepCount шагов", fontSize = 15.sp)
+                if (stepCount == 0L) Text(
+                    "Шагов пока нет. Включите в Google Fit: Профиль → настройки → «Синхронизация с Health Connect».",
+                    fontSize = 13.sp, color = Warn,
                 )
             } else {
                 Text(
