@@ -103,6 +103,7 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
         EntryDialog(
             e, onDismiss = { editing = null },
             onSave = { vm.setKcal(e, it); editing = null },
+            onRewrite = { vm.rewrite(e, it); editing = null },
             onDelete = { vm.delete(e); editing = null },
         )
     }
@@ -458,27 +459,50 @@ private fun parseOptions(json: String?): List<String> = try {
 }
 
 @Composable
-fun EntryDialog(e: Entry, onDismiss: () -> Unit, onSave: (Int) -> Unit, onDelete: () -> Unit) {
+fun EntryDialog(
+    e: Entry, onDismiss: () -> Unit, onSave: (Int) -> Unit, onRewrite: (String) -> Unit, onDelete: () -> Unit,
+) {
     val burn = (e.kcal ?: 0) < 0 || e.type == EntryType.ACTIVITY
+    var record by remember { mutableStateOf(e.rawText) }
     var text by remember { mutableStateOf(e.kcal?.let { kotlin.math.abs(it).toString() } ?: "") }
+    // a new description means new calories: they are counted again from the text, the number field waits
+    val rewritten = record.trim() != e.rawText.trim()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(e.title) },
         text = {
             Column {
-                if (e.rawText != e.title) Text(e.rawText, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(
+                    record, { record = it.take(500) },
+                    label = { Text(if (burn) "Тренировка" else "Что съели") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 4,
+                )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     text, { v -> text = v.filter { it.isDigit() }.take(5) },
                     label = { Text(if (burn) "Сожжено, ккал" else "Калории") },
+                    supportingText = if (rewritten) ({ Text("Пересчитаю по новому тексту") }) else null,
+                    enabled = !rewritten,
                     singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
-                TextButton(onDelete, Modifier.padding(top = 8.dp)) { Text("Удалить запись", color = Over) }
+                Row(Modifier.padding(top = 8.dp)) {
+                    if (e.type == EntryType.FOOD && !rewritten) TextButton({ onRewrite(record) }) { Text("Пересчитать ИИ") }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onDelete) { Text("Удалить", color = Over) }
+                }
             }
         },
         confirmButton = {
-            TextButton({ text.toIntOrNull()?.let { onSave(if (burn) -it else it) } }, enabled = text.isNotEmpty()) { Text("Сохранить") }
+            TextButton(
+                {
+                    if (rewritten) onRewrite(record)
+                    else text.toIntOrNull()?.let { onSave(if (burn) -it else it) }
+                },
+                enabled = if (rewritten) record.isNotBlank() else text.isNotEmpty(),
+            ) { Text(if (rewritten) "Пересчитать" else "Сохранить") }
         },
         dismissButton = { TextButton(onDismiss) { Text("Отмена") } },
     )

@@ -32,6 +32,12 @@ shot d3_typing_keyboard
 adb shell input keyevent 66; sleep 3
 adb shell input keyevent 4; sleep 2
 shot d4_after_send
+tap_text "grechka"; sleep 2
+shot d4b_edit_dialog
+tap_text "grechka"; sleep 1
+adb shell input keyevent 123; adb shell input text "%s%2B%s1%skotleta"; sleep 2
+shot d4c_edit_rewritten
+adb shell input keyevent 4; sleep 1; adb shell input keyevent 4; sleep 2
 tap_text "Дневник"; sleep 2
 shot d5_diary
 tap_text "Профиль"; sleep 2

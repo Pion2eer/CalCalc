@@ -96,27 +96,38 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun add(text: String) {
         if (text.isBlank()) return
-        val day = _day.value.toString()
-        val entry = when (val p = InputParser.parse(text)) {
-            is Parsed.Manual -> Entry(
-                type = EntryType.MANUAL, rawText = text, title = p.title, kcal = p.kcal,
-                status = EntryStatus.DONE, day = day,
-            )
-            is Parsed.Workout -> Entry(
-                type = EntryType.ACTIVITY, rawText = text,
-                title = "${p.activity.name}, ${p.minutes} мин",
-                kcal = -Activities.netKcal(p.activity.met, weight.value, p.minutes, p.intensity),
-                status = EntryStatus.DONE, day = day,
-            )
-            is Parsed.Food -> Entry(
-                type = EntryType.FOOD, rawText = text, title = p.text, kcal = null,
-                status = EntryStatus.QUEUED, day = day,
-            )
-        }
+        val entry = parseEntry(text, _day.value.toString())
         viewModelScope.launch {
             db.entries().upsert(entry)
             SyncWorker.enqueue(getApplication())
         }
+    }
+
+    /** The user rewrote what they ate or did: the entry is read again from the new text, food goes back to the AI. */
+    fun rewrite(entry: Entry, text: String) {
+        if (text.isBlank()) return
+        val fresh = parseEntry(text.trim(), entry.day).copy(id = entry.id, createdAt = entry.createdAt)
+        viewModelScope.launch {
+            db.entries().upsert(fresh)
+            SyncWorker.enqueue(getApplication())
+        }
+    }
+
+    private fun parseEntry(text: String, day: String) = when (val p = InputParser.parse(text)) {
+        is Parsed.Manual -> Entry(
+            type = EntryType.MANUAL, rawText = text, title = p.title, kcal = p.kcal,
+            status = EntryStatus.DONE, day = day,
+        )
+        is Parsed.Workout -> Entry(
+            type = EntryType.ACTIVITY, rawText = text,
+            title = "${p.activity.name}, ${p.minutes} мин",
+            kcal = -Activities.netKcal(p.activity.met, weight.value, p.minutes, p.intensity),
+            status = EntryStatus.DONE, day = day,
+        )
+        is Parsed.Food -> Entry(
+            type = EntryType.FOOD, rawText = text, title = p.text, kcal = null,
+            status = EntryStatus.QUEUED, day = day,
+        )
     }
 
     fun setKcal(entry: Entry, kcal: Int) = viewModelScope.launch {
