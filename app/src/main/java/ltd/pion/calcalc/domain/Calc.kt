@@ -5,16 +5,21 @@ import java.time.LocalDate
 import kotlin.math.roundToInt
 
 object Norm {
-    /** Mifflin–St Jeor basal rate × 1.2 everyday activity, shifted by the goal. Workouts are added per day, not here. */
+    /**
+     * Mifflin–St Jeor basal rate × 1.2 everyday activity, shifted by the goal. Workouts are added per day, not here.
+     * To lose weight it takes away 20 % but at most 500 kcal, and never goes below 1200 kcal for women and 1500 for
+     * men: a smaller, older person would otherwise get a norm too low to be safe.
+     */
     fun daily(profile: Profile, weightKg: Double, today: LocalDate = LocalDate.now()): Int {
         val age = today.year - profile.birthYear
         val bmr = 10 * weightKg + 6.25 * profile.heightCm - 5 * age + if (profile.male) 5 else -161
-        val shift = when (profile.goal) {
-            -1 -> -500
-            1 -> 300
-            else -> 0
+        val tdee = bmr * 1.2
+        val norm = when (profile.goal) {
+            -1 -> tdee - minOf(500.0, tdee * 0.2)
+            1 -> tdee + 300
+            else -> tdee
         }
-        return (bmr * 1.2 + shift).roundToInt()
+        return norm.roundToInt().coerceAtLeast(if (profile.male) 1500 else 1200)
     }
 }
 

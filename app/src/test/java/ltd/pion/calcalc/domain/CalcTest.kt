@@ -41,4 +41,10 @@ class CalcTest {
         // 10*80 + 6.25*180 - 5*36 + 5 = 1750; ×1.2 = 2100
         assertEquals(2100, Norm.daily(p, 80.0, LocalDate.of(2026, 10, 28)))
     }
+
+    @Test fun normNeverTooLow() {
+        val p = Profile(male = false, birthYear = 1976, heightCm = 160, goal = -1)
+        // 10*60 + 6.25*160 - 5*50 - 161 = 1189; ×1.2 = 1427; −20 % = 1141, raised to the 1200 floor
+        assertEquals(1200, Norm.daily(p, 60.0, LocalDate.of(2026, 10, 28)))
+    }
 }
