@@ -1,9 +1,10 @@
 /**
  * CalCalc shared AI script. Deploy as a web app: Execute as "Me", access "Anyone".
- * Script properties (Project settings → Script properties):
- *   REG_KEY  — secret that ai-local.ps1 sends when it registers the tunnel URL
- *   ALLOWED  — comma-separated e-mails allowed to use the AI ("*" = anyone signed in)
- * The PC registers itself every few minutes: POST ?action=localReg&key=REG_KEY {url, token, model, paused}.
+ * Nothing to configure: the script owner may use the AI; other e-mails go in the optional script property
+ *   ALLOWED — comma-separated e-mails ("*" = anyone signed in with Google).
+ * The PC registers itself every 4 minutes: POST ?action=localReg {url, token, model, paused}. The first
+ * registration pins the PC's proxy token; after that only the same token may move the address
+ * (to change PCs, delete the PC_TOKEN property).
  */
 
 function doPost(e) {
@@ -12,7 +13,7 @@ function doPost(e) {
   try { body = JSON.parse((e.postData && e.postData.contents) || '{}'); } catch (x) {}
   var action = p.action || body.action;
   try {
-    if (action === 'localReg') return out_(localReg_(p.key || body.key, body));
+    if (action === 'localReg') return out_(localReg_(body));
     if (action === 'parse') return out_(parse_(body));
     return out_({ ok: false, error: 'unknown action' });
   } catch (err) {
@@ -25,9 +26,16 @@ function doGet() {
   return out_({ ok: true, app: 'CalCalc', pcOnline: !!(pc && fresh_(pc)) });
 }
 
-function localReg_(key, b) {
+function localReg_(b) {
   var props = PropertiesService.getScriptProperties();
-  if (!key || key !== props.getProperty('REG_KEY')) return { ok: false, error: 'bad key' };
+  if (!b.token || !b.url) return { ok: false, error: 'bad request' };
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var pinned = props.getProperty('PC_TOKEN');
+    if (!pinned) props.setProperty('PC_TOKEN', b.token);
+    else if (pinned !== b.token) return { ok: false, error: 'bad token' };
+  } finally { lock.releaseLock(); }
   props.setProperty('PC', JSON.stringify({
     url: String(b.url || '').replace(/\/+$/, ''), token: b.token, model: b.model || 'gemma4:12b-it-qat',
     paused: !!b.paused, at: Date.now(),
@@ -61,7 +69,8 @@ function caller_(accessToken) {
 function allowed_(email) {
   var list = String(PropertiesService.getScriptProperties().getProperty('ALLOWED') || '')
     .toLowerCase().split(',').map(function (s) { return s.trim(); }).filter(String);
-  return list.indexOf('*') >= 0 || list.indexOf(email) >= 0;
+  var owner = String(Session.getEffectiveUser().getEmail() || '').toLowerCase();
+  return email === owner || list.indexOf('*') >= 0 || list.indexOf(email) >= 0;
 }
 
 var PROMPT =

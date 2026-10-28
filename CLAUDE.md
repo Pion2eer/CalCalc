@@ -7,5 +7,5 @@
 - Ключ подписи только в секретах репозитория и у пользователя на ПК. Другой ключ сломает обновление поверх.
 - ИИ: прокси `ai-local.ps1` из соседнего проекта «Мой ассистент» (D:\MyDesctopOffice\local-ai) перед Ollama `gemma4:12b-it-qat`, туннель Cloudflare; Apps Script вызывает `/chat`.
 - Вход: Google Identity AuthorizationClient (drive.file + userinfo.email), только Android OAuth-клиент с SHA-1 ключа подписи. У каждого пользователя своя таблица «CalCalc» на его Диске (Sheets API токеном из приложения).
-- ИИ общий: `apps-script/Code.gs` (web app). POST `{action:"parse", accessToken, text, weightKg}` → `{ok, retry, error, title, kcal, protein, fat, carbs, question, options[]}`. Скрипт проверяет токен через tokeninfo и список ALLOWED, ПК регистрируется `?action=localReg&key=REG_KEY {url, token, model, paused}`.
+- ИИ общий: `apps-script/Code.gs` (web app). POST `{action:"parse", accessToken, text, weightKg}` → `{ok, retry, error, title, kcal, protein, fat, carbs, question, options[]}`. Скрипт проверяет токен через tokeninfo и список ALLOWED, ПК регистрируется `?action=localReg {url, token, model, paused}` (первая регистрация закрепляет токен прокси); ai-local.ps1 шлёт её также на адреса из local-ai\extra-scripts.txt.
 - Сайт и политика конфиденциальности: `docs/` → GitHub Pages, домен calcalc.pion.ltd.
