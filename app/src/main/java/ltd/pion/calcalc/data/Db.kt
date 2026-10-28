@@ -89,6 +89,10 @@ interface EntryDao {
     @Query("SELECT * FROM entries WHERE synced = 0 ORDER BY createdAt")
     suspend fun unsynced(): List<Entry>
 
+    /** Entries that got the question «null» from an old app version go back to the AI to be counted properly. */
+    @Query("UPDATE entries SET status = 'queued', question = NULL, options = NULL WHERE status = 'needs_answer' AND question = 'null'")
+    suspend fun requeueNullQuestions()
+
     /** Food the AI still has to count: new entries and those whose question was just answered. */
     @Query("SELECT * FROM entries WHERE type = 'food' AND status IN ('queued', 'processing') ORDER BY createdAt")
     suspend fun forAi(): List<Entry>
