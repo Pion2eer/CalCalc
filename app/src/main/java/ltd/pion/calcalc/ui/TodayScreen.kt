@@ -372,7 +372,7 @@ private fun EmptyHint() {
 private fun InputBar(input: String, onInput: (String) -> Unit, onSend: () -> Unit, onQuick: (String) -> Unit) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface)
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
             Spacer(Modifier.height(8.dp))
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(QuickAdds) { q ->
