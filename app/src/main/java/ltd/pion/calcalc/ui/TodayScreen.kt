@@ -58,6 +58,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -141,7 +146,30 @@ fun TodayContent(
     }
 
     Column(modifier.fillMaxSize()) {
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(bottom = 12.dp)) {
+        // a sideways swipe moves between days: to the right goes back, to the left forward; the list follows the finger
+        var drag by remember { mutableFloatStateOf(0f) }
+        val limit = with(LocalDensity.current) { 80.dp.toPx() }
+        LazyColumn(
+            Modifier.weight(1f).fillMaxWidth()
+                .pointerInput(day) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            if (drag > limit) onShiftDay(-1)
+                            else if (drag < -limit && day.isBefore(today)) onShiftDay(1)
+                            drag = 0f
+                        },
+                        onDragCancel = { drag = 0f },
+                    ) { change, dx ->
+                        change.consume()
+                        drag += dx
+                    }
+                }
+                .graphicsLayer {
+                    // past today there is nothing, so the list only gives a little
+                    translationX = if (drag < 0 && !day.isBefore(today)) drag / 6 else drag / 2
+                    alpha = 1f - (kotlin.math.abs(drag) / (limit * 6)).coerceAtMost(0.4f)
+                },
+            contentPadding = PaddingValues(bottom = 12.dp)) {
             item { UpdateBanner(update, onUpdate) }
             item { DayHeader(day, today, onShiftDay) }
             item { SummaryCard(s, entries, aiBlocker) }

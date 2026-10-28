@@ -38,6 +38,10 @@ tap_text "grechka"; sleep 1
 adb shell input keyevent 123; adb shell input text "%si%skotleta"; sleep 2
 shot d4c_edit_rewritten
 adb shell input keyevent 4; sleep 1; adb shell input keyevent 4; sleep 2
+adb shell input swipe 200 1000 900 1000 250; sleep 2
+shot d4d_swiped_to_yesterday
+adb shell input swipe 900 1000 200 1000 250; sleep 2
+shot d4e_swiped_back_today
 tap_text "Дневник"; sleep 2
 shot d5_diary
 tap_text "Профиль"; sleep 2
