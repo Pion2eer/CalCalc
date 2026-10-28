@@ -1,0 +1,1 @@
+-keep class ltd.pion.calcalc.data.** { *; }

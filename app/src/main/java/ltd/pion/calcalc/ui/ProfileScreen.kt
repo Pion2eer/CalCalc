@@ -1,0 +1,124 @@
+package ltd.pion.calcalc.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import ltd.pion.calcalc.BuildConfig
+import ltd.pion.calcalc.data.Profile
+import ltd.pion.calcalc.data.ServerConfig
+import ltd.pion.calcalc.domain.Norm
+import ltd.pion.calcalc.update.UpdateState
+
+@Composable
+fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
+    val p0 by vm.profile.collectAsState()
+    val w0 by vm.weight.collectAsState()
+    val update by vm.update.collectAsState()
+
+    var male by remember(p0) { mutableStateOf(p0.male) }
+    var year by remember(p0) { mutableStateOf(p0.birthYear.toString()) }
+    var height by remember(p0) { mutableStateOf(p0.heightCm.toString()) }
+    var goal by remember(p0) { mutableStateOf(p0.goal) }
+    var weight by remember(w0) { mutableStateOf(trimKg(w0)) }
+    val server = remember { vm.prefs.server }
+    var url by remember { mutableStateOf(server.scriptUrl) }
+    var token by remember { mutableStateOf(server.token) }
+    var autoDl by remember { mutableStateOf(vm.prefs.autoDownloadOnWifi) }
+
+    val draft = Profile(male, year.toIntOrNull() ?: p0.birthYear, height.toIntOrNull() ?: p0.heightCm, goal)
+    val kg = weight.replace(',', '.').toDoubleOrNull()
+
+    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Профиль", style = MaterialTheme.typography.titleLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(male, { male = true }, { Text("Мужчина") })
+            FilterChip(!male, { male = false }, { Text("Женщина") })
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            NumberField("Год рождения", year, Modifier.weight(1f)) { year = it }
+            NumberField("Рост, см", height, Modifier.weight(1f)) { height = it }
+            NumberField("Вес, кг", weight, Modifier.weight(1f), decimal = true) { weight = it }
+        }
+        Text("Цель")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(goal == -1, { goal = -1 }, { Text("Похудеть") })
+            FilterChip(goal == 0, { goal = 0 }, { Text("Держать") })
+            FilterChip(goal == 1, { goal = 1 }, { Text("Набрать") })
+        }
+        Text(
+            "Норма: ${Norm.daily(draft, kg ?: w0)} ккал в день, тренировки добавляются к ней.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button({ vm.saveProfile(draft, kg); onSaved() }, Modifier.fillMaxWidth()) { Text("Сохранить") }
+
+        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        Text("Связь с ИИ на компьютере", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Адрес веб-приложения Google Apps Script и ваш токен. Без них записи хранятся на телефоне и ждут.",
+            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(url, { url = it }, Modifier.fillMaxWidth(), label = { Text("Адрес скрипта (…/exec)") }, singleLine = true)
+        OutlinedTextField(token, { token = it }, Modifier.fillMaxWidth(), label = { Text("Токен") }, singleLine = true)
+        OutlinedButton({ vm.saveServer(ServerConfig(url, token)) }, Modifier.fillMaxWidth()) { Text("Сохранить и синхронизировать") }
+
+        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        Text("Обновления", style = MaterialTheme.typography.titleMedium)
+        Text("Установлена версия ${BuildConfig.VERSION_NAME}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Скачивать автоматически по Wi-Fi", Modifier.weight(1f))
+            Switch(autoDl, { autoDl = it; vm.prefs.autoDownloadOnWifi = it })
+        }
+        when (val u = update) {
+            is UpdateState.Available, is UpdateState.ReadyToInstall, is UpdateState.Downloading -> UpdateBanner(u, vm::downloadAndInstall)
+            else -> {
+                Button({ vm.checkUpdate() }, Modifier.fillMaxWidth(), enabled = u !is UpdateState.Checking) {
+                    Text(if (u is UpdateState.Checking) "Проверяю…" else "Проверить обновления")
+                }
+                when (u) {
+                    is UpdateState.UpToDate -> Text("У вас последняя версия", color = Accent)
+                    is UpdateState.Error -> Text(u.message, color = Warn)
+                    else -> {}
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun NumberField(label: String, value: String, modifier: Modifier, decimal: Boolean = false, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value, { v -> onChange(v.filter { it.isDigit() || (decimal && (it == '.' || it == ',')) }.take(6)) },
+        modifier, label = { Text(label, fontSize = 12.sp) }, singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number),
+    )
+}
+
+private fun trimKg(v: Double) = if (v % 1.0 == 0.0) v.toInt().toString() else v.toString()

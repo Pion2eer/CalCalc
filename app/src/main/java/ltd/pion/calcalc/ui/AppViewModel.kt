@@ -1,0 +1,180 @@
+package ltd.pion.calcalc.ui
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import ltd.pion.calcalc.data.AppDb
+import ltd.pion.calcalc.data.DayTotal
+import ltd.pion.calcalc.data.Entry
+import ltd.pion.calcalc.data.EntryStatus
+import ltd.pion.calcalc.data.EntryType
+import ltd.pion.calcalc.data.Prefs
+import ltd.pion.calcalc.data.Profile
+import ltd.pion.calcalc.data.ServerConfig
+import ltd.pion.calcalc.data.Weight
+import ltd.pion.calcalc.domain.Activities
+import ltd.pion.calcalc.domain.InputParser
+import ltd.pion.calcalc.domain.Norm
+import ltd.pion.calcalc.domain.Parsed
+import ltd.pion.calcalc.sync.SyncWorker
+import ltd.pion.calcalc.update.UpdateState
+import ltd.pion.calcalc.update.Updater
+import java.time.LocalDate
+
+data class DaySummary(
+    val norm: Int,
+    val eaten: Int,
+    val burned: Int,
+    val pending: Int,
+) {
+    val left get() = norm + burned - eaten
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class AppViewModel(app: Application) : AndroidViewModel(app) {
+    private val db = AppDb.get(app)
+    val prefs = Prefs(app)
+
+    private val _day = MutableStateFlow(LocalDate.now())
+    val day: StateFlow<LocalDate> = _day.asStateFlow()
+
+    val weight: StateFlow<Double> = db.weights().latest().map { it?.kg ?: 75.0 }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 75.0)
+
+    val weights: StateFlow<List<Weight>> = db.weights().all()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val profile: StateFlow<Profile> = prefs.changes().map { prefs.profile }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, prefs.profile)
+
+    val entries: StateFlow<List<Entry>> = _day.flatMapLatest { db.entries().forDay(it.toString()) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val totals: StateFlow<List<DayTotal>> = db.entries().totals()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val summary: StateFlow<DaySummary> = combine(entries, profile, weight) { list, p, w ->
+        DaySummary(
+            norm = Norm.daily(p, w),
+            eaten = list.mapNotNull { it.kcal }.filter { it > 0 }.sum(),
+            burned = -list.mapNotNull { it.kcal }.filter { it < 0 }.sum(),
+            pending = list.count { it.kcal == null },
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, DaySummary(2000, 0, 0, 0))
+
+    private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    val update: StateFlow<UpdateState> = _update.asStateFlow()
+
+    init {
+        checkUpdate(silent = true)
+    }
+
+    fun shiftDay(by: Long) {
+        val next = _day.value.plusDays(by)
+        if (!next.isAfter(LocalDate.now())) _day.value = next
+    }
+
+    fun add(text: String) {
+        if (text.isBlank()) return
+        val day = _day.value.toString()
+        val entry = when (val p = InputParser.parse(text)) {
+            is Parsed.Manual -> Entry(
+                type = EntryType.MANUAL, rawText = text, title = p.title, kcal = p.kcal,
+                status = EntryStatus.DONE, day = day,
+            )
+            is Parsed.Workout -> Entry(
+                type = EntryType.ACTIVITY, rawText = text,
+                title = "${p.activity.name}, ${p.minutes} мин",
+                kcal = -Activities.netKcal(p.activity.met, weight.value, p.minutes, p.intensity),
+                status = EntryStatus.DONE, day = day,
+            )
+            is Parsed.Food -> Entry(
+                type = EntryType.FOOD, rawText = text, title = p.text, kcal = null,
+                status = EntryStatus.QUEUED, day = day,
+            )
+        }
+        viewModelScope.launch {
+            db.entries().upsert(entry)
+            SyncWorker.enqueue(getApplication())
+        }
+    }
+
+    fun setKcal(entry: Entry, kcal: Int) = viewModelScope.launch {
+        db.entries().update(
+            entry.copy(
+                kcal = kcal, estimated = false, status = EntryStatus.DONE, editedByUser = true,
+                synced = false, updatedAt = System.currentTimeMillis(),
+            )
+        )
+        SyncWorker.enqueue(getApplication())
+    }
+
+    fun delete(entry: Entry) = viewModelScope.launch { db.entries().delete(entry.id) }
+
+    fun saveProfile(p: Profile, weightKg: Double?) = viewModelScope.launch {
+        prefs.profile = p
+        prefs.profileDone = true
+        if (weightKg != null) db.weights().upsert(Weight(LocalDate.now().toString(), weightKg))
+    }
+
+    fun saveWeight(kg: Double) = viewModelScope.launch {
+        db.weights().upsert(Weight(LocalDate.now().toString(), kg))
+    }
+
+    fun saveServer(s: ServerConfig) {
+        prefs.server = s
+        SyncWorker.enqueue(getApplication())
+    }
+
+    fun checkUpdate(silent: Boolean = false) {
+        if (_update.value is UpdateState.Checking || _update.value is UpdateState.Downloading) return
+        if (!silent) _update.value = UpdateState.Checking
+        viewModelScope.launch {
+            _update.value = try {
+                val r = Updater.fetchLatest()
+                when {
+                    !Updater.isNewer(r) -> if (silent) UpdateState.Idle else UpdateState.UpToDate
+                    Updater.apkFile(getApplication(), r).exists() -> UpdateState.ReadyToInstall(r, Updater.apkFile(getApplication(), r))
+                    else -> UpdateState.Available(r)
+                }
+            } catch (e: Exception) {
+                if (silent) UpdateState.Idle else UpdateState.Error("Не удалось проверить: ${e.message ?: "нет связи"}")
+            }
+        }
+    }
+
+    fun downloadAndInstall() {
+        val r = when (val s = _update.value) {
+            is UpdateState.Available -> s.release
+            is UpdateState.ReadyToInstall -> {
+                install(s)
+                return
+            }
+            else -> return
+        }
+        viewModelScope.launch {
+            _update.value = UpdateState.Downloading(r, 0)
+            _update.value = try {
+                val f = Updater.download(getApplication(), r) { _update.value = UpdateState.Downloading(r, it) }
+                UpdateState.ReadyToInstall(r, f).also { install(it) }
+            } catch (e: Exception) {
+                UpdateState.Error(e.message ?: "Ошибка загрузки")
+            }
+        }
+    }
+
+    private fun install(s: UpdateState.ReadyToInstall) {
+        val ctx = getApplication<Application>()
+        if (!Updater.canInstall(ctx)) Updater.askInstallPermission(ctx) else Updater.install(ctx, s.file)
+    }
+}
