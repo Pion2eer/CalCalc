@@ -32,8 +32,13 @@ class CalcTest {
     @Test fun foodGoesToAi() {
         assertTrue(InputParser.parse("200 г овсянки с бананом") is Parsed.Food)
         assertTrue(InputParser.parse("борщ") is Parsed.Food)
-        // an activity word without a duration is not a workout
-        assertTrue(InputParser.parse("ходьба") is Parsed.Food)
+        // a long text that only mentions an activity stays food
+        assertTrue(InputParser.parse("салат и курица после зала вечером") is Parsed.Food)
+    }
+
+    @Test fun workoutWithoutTimeIsUsualSession() {
+        assertEquals(60, (InputParser.parse("Тренировка в зале") as Parsed.Workout).minutes)
+        assertEquals(30, (InputParser.parse("ходьба") as Parsed.Workout).minutes)
     }
 
     @Test fun mifflinNorm() {

@@ -34,7 +34,7 @@ object Activities {
         Activity("Бег", 9.8, listOf("бег", "бегал", "пробежка")),
         Activity("Велосипед", 6.8, listOf("велосипед", "вело", "велик")),
         Activity("Плавание", 7.0, listOf("плавание", "плавал", "бассейн")),
-        Activity("Тренажёрный зал", 5.0, listOf("зал", "тренажер", "тренажёр", "силовая", "качалка")),
+        Activity("Тренажёрный зал", 5.0, listOf("зал", "тренажер", "тренажёр", "силовая", "качалка", "тренировк")),
         Activity("Футбол", 7.0, listOf("футбол")),
         Activity("Йога", 2.5, listOf("йога")),
         Activity("Танцы", 5.0, listOf("танцы", "танцевал")),
@@ -82,7 +82,10 @@ object InputParser {
         val lower = text.lowercase()
         val activity = Activities.all.firstOrNull { a -> a.words.any { w -> Regex("""(^|[^а-яёa-z])$w""").containsMatchIn(lower) } }
         if (activity != null) {
+            // "тренировка в зале" without a time is a usual session: an hour, half an hour of walking; the entry can be
+            // edited. A longer text without a time may be food that only mentions the activity, so it goes to the AI.
             val min = durationMinutes(lower)
+                ?: if (lower.split(Regex("""\s+""")).size <= 3) (if (activity.name == "Ходьба") 30 else 60) else null
             if (min != null) {
                 val intensity = when {
                     listOf("легко", "спокойно", "медленно").any { it in lower } -> 0.8
