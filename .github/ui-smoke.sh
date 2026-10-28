@@ -42,4 +42,9 @@ tap_text "Дневник"; sleep 2
 shot d5_diary
 tap_text "Профиль"; sleep 2
 shot d6_profile
+adb shell input swipe 500 1600 500 500 300; sleep 1
+shot d7_profile_steps
+tap_text "Подключить шаги"; sleep 4
+shot d8_health_connect_permission
+adb shell input keyevent 4; sleep 2
 ls -la $out

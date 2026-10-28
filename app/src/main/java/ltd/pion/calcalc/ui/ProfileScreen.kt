@@ -5,6 +5,10 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.health.connect.client.PermissionController
+import ltd.pion.calcalc.sync.Steps
+import ltd.pion.calcalc.sync.StepsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.TextButton
@@ -53,6 +57,11 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
     val account by vm.account.collectAsState()
     val authError by vm.authError.collectAsState()
     val ctx = LocalContext.current
+    val steps by vm.steps.collectAsState()
+    val stepsLauncher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) {
+        vm.refreshSteps()
+    }
+    LaunchedEffect(Unit) { vm.refreshSteps() }
     val signInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
         vm.onSignInResult(it.data)
     }
@@ -66,6 +75,12 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
         onSync = vm::syncNow, onSignOut = vm::signOut,
         onAiUrl = { vm.prefs.aiUrl = it }, onAutoDownload = { vm.prefs.autoDownloadOnWifi = it },
         onCheckUpdate = { vm.checkUpdate() }, onUpdate = vm::downloadAndInstall, modifier = modifier,
+        steps = steps,
+        onSteps = {
+            if (steps == StepsState.NEEDS_INSTALL) ctx.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${Steps.PROVIDER}&url=healthconnect%3A%2F%2Fonboarding"))
+            ) else stepsLauncher.launch(Steps.permissions)
+        },
     )
 }
 
@@ -90,6 +105,8 @@ fun ProfileContent(
     onCheckUpdate: () -> Unit,
     onUpdate: () -> Unit,
     modifier: Modifier = Modifier,
+    steps: StepsState = StepsState.OFF,
+    onSteps: () -> Unit = {},
 ) {
     var male by remember(p0) { mutableStateOf(p0.male) }
     var year by remember(p0) { mutableStateOf(p0.birthYear.toString()) }
@@ -158,6 +175,24 @@ fun ProfileContent(
                 TextButton(onSignOut, Modifier.fillMaxWidth()) { Text("Выйти из аккаунта") }
             }
             authError?.let { Text(it, color = Warn, fontSize = 13.sp) }
+        }
+
+        if (steps != StepsState.UNAVAILABLE) Section("Шаги") {
+            if (steps == StepsState.ON) {
+                Text(
+                    "Подключено. Шаги из Google Fit и телефона каждый день попадают в «Сожжено».",
+                    fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Text(
+                    "Калории от шагов будут добавляться в «Сожжено» сами. Шаги берутся из Health Connect, " +
+                        "куда их пишут Google Fit, Samsung Health и сам телефон.",
+                    fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onSteps, Modifier.fillMaxWidth().height(48.dp)) {
+                    Text(if (steps == StepsState.NEEDS_INSTALL) "Установить Health Connect" else "Подключить шаги")
+                }
+            }
         }
 
         Section("Обновления") {

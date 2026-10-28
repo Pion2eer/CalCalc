@@ -27,6 +27,8 @@ import ltd.pion.calcalc.domain.Norm
 import ltd.pion.calcalc.domain.Parsed
 import ltd.pion.calcalc.sync.GoogleAuth
 import ltd.pion.calcalc.sync.Sheets
+import ltd.pion.calcalc.sync.Steps
+import ltd.pion.calcalc.sync.StepsState
 import ltd.pion.calcalc.sync.SyncWorker
 import ltd.pion.calcalc.update.UpdateState
 import ltd.pion.calcalc.update.Updater
@@ -89,9 +91,43 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         checkUpdate(silent = true)
     }
 
+    private val _steps = MutableStateFlow(StepsState.OFF)
+    val steps: StateFlow<StepsState> = _steps.asStateFlow()
+
+    /**
+     * Today's steps from Health Connect become one activity entry of the day, «Шаги: 8 400». Walking typed in by
+     * hand is already inside those steps, so only the rest is added. An entry the user corrected is left alone.
+     */
+    fun refreshSteps() = viewModelScope.launch {
+        val ctx = getApplication<Application>()
+        _steps.value = runCatching { Steps.state(ctx) }.getOrDefault(StepsState.UNAVAILABLE)
+        if (_steps.value != StepsState.ON) return@launch
+        val day = _day.value
+        val count = runCatching { Steps.count(ctx, day) }.getOrNull() ?: return@launch
+        val id = "steps-$day"
+        val old = db.entries().byId(id)
+        if (old?.editedByUser == true || (old == null && count == 0L)) return@launch
+        val walked = db.entries().forDayOnce(day.toString())
+            .filter { it.type == EntryType.ACTIVITY && it.id != id && it.title.startsWith("Ходьба") }
+            .sumOf { -(it.kcal ?: 0) }
+        val kcal = (Activities.stepsKcal(count, weight.value) - walked).coerceAtLeast(0)
+        val title = "Шаги: " + String.format(java.util.Locale("ru"), "%,d", count)
+        if (old != null && old.title == title && old.kcal == -kcal) return@launch
+        db.entries().upsert(
+            Entry(
+                id = id, type = EntryType.ACTIVITY, rawText = title, title = title, kcal = -kcal,
+                status = EntryStatus.DONE, day = day.toString(), createdAt = old?.createdAt ?: System.currentTimeMillis(),
+            )
+        )
+        SyncWorker.enqueue(ctx)
+    }
+
     fun shiftDay(by: Long) {
         val next = _day.value.plusDays(by)
-        if (!next.isAfter(LocalDate.now())) _day.value = next
+        if (!next.isAfter(LocalDate.now())) {
+            _day.value = next
+            refreshSteps()
+        }
     }
 
     fun add(text: String) {

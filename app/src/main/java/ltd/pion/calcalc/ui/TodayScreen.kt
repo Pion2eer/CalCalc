@@ -1,6 +1,7 @@
 package ltd.pion.calcalc.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -92,6 +93,11 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
     val update by vm.update.collectAsState()
     val blocker by vm.aiBlocker.collectAsState()
     var editing by remember { mutableStateOf<Entry?>(null) }
+    // steps keep coming in during the day: read them again each time the screen is opened
+    LifecycleResumeEffect(Unit) {
+        vm.refreshSteps()
+        onPauseOrDispose {}
+    }
 
     TodayContent(
         day = day, today = LocalDate.now(), entries = entries, s = s, update = update, aiBlocker = blocker,

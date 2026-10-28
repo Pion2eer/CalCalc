@@ -40,6 +40,9 @@ object Activities {
     /** Net burn: what the workout added on top of resting, so the basal rate is not counted twice. */
     fun netKcal(met: Double, weightKg: Double, minutes: Int, intensity: Double = 1.0): Int =
         ((met * intensity - 1.0) * weightKg * minutes / 60.0).roundToInt().coerceAtLeast(0)
+
+    /** Net burn of walking by steps: about 0.0005 kcal per step and kilogram above resting (≈ 0.04 kcal a step at 80 kg). */
+    fun stepsKcal(steps: Long, weightKg: Double): Int = (steps * weightKg * 0.0005).roundToInt()
 }
 
 sealed interface Parsed {

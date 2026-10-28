@@ -86,6 +86,9 @@ interface EntryDao {
     @Query("SELECT * FROM entries WHERE id = :id")
     suspend fun byId(id: String): Entry?
 
+    @Query("SELECT * FROM entries WHERE day = :day")
+    suspend fun forDayOnce(day: String): List<Entry>
+
     @Query("SELECT * FROM entries WHERE synced = 0 ORDER BY createdAt")
     suspend fun unsynced(): List<Entry>
 
