@@ -95,7 +95,7 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
                     modifier = Modifier.padding(8.dp),
                 )
             }
-            items(entries, key = { it.id }) { e -> EntryRow(e, onClick = { editing = e }, onDelete = { vm.delete(e) }) }
+            items(entries, key = { it.id }) { e -> EntryRow(e, onClick = { editing = e }, onDelete = { vm.delete(e) }, onAnswer = { vm.answer(e, it) }) }
         }
 
         LazyRow(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -159,8 +159,9 @@ private fun Stat(label: String, value: Int, color: Color) {
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun EntryRow(e: Entry, onClick: () -> Unit, onDelete: () -> Unit) {
+private fun EntryRow(e: Entry, onClick: () -> Unit, onDelete: () -> Unit, onAnswer: (String) -> Unit) {
     Card(
         Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -169,7 +170,8 @@ private fun EntryRow(e: Entry, onClick: () -> Unit, onDelete: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text(e.title, style = MaterialTheme.typography.bodyLarge)
                 val sub = when {
-                    e.kcal == null && e.status == EntryStatus.NEEDS_ANSWER -> "Нужно уточнить"
+                    e.status == EntryStatus.NEEDS_ANSWER -> "Нужно уточнить"
+                    e.status == EntryStatus.FAILED -> "ИИ не разобрал, введите калории вручную"
                     e.kcal == null -> "Ждёт ИИ, можно ввести калории вручную"
                     e.estimated -> "Примерно"
                     else -> null
@@ -189,7 +191,23 @@ private fun EntryRow(e: Entry, onClick: () -> Unit, onDelete: () -> Unit) {
             Spacer(Modifier.width(4.dp))
             IconButton(onDelete) { Icon(Icons.Filled.Delete, "Удалить", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
+        if (e.status == EntryStatus.NEEDS_ANSWER && e.question != null) {
+            Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp)) {
+                Text(e.question, color = Warn)
+                val opts = remember(e.options) { parseOptions(e.options) + "Не знаю" }
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    opts.forEach { o -> androidx.compose.material3.OutlinedButton({ onAnswer(o) }) { Text(o) } }
+                }
+            }
+        }
     }
+}
+
+private fun parseOptions(json: String?): List<String> = try {
+    val a = org.json.JSONArray(json ?: "[]")
+    (0 until a.length()).map { a.getString(it) }
+} catch (e: Exception) {
+    emptyList()
 }
 
 @Composable

@@ -20,12 +20,13 @@ import ltd.pion.calcalc.data.EntryStatus
 import ltd.pion.calcalc.data.EntryType
 import ltd.pion.calcalc.data.Prefs
 import ltd.pion.calcalc.data.Profile
-import ltd.pion.calcalc.data.ServerConfig
 import ltd.pion.calcalc.data.Weight
 import ltd.pion.calcalc.domain.Activities
 import ltd.pion.calcalc.domain.InputParser
 import ltd.pion.calcalc.domain.Norm
 import ltd.pion.calcalc.domain.Parsed
+import ltd.pion.calcalc.sync.GoogleAuth
+import ltd.pion.calcalc.sync.Sheets
 import ltd.pion.calcalc.sync.SyncWorker
 import ltd.pion.calcalc.update.UpdateState
 import ltd.pion.calcalc.update.Updater
@@ -131,10 +132,61 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         db.weights().upsert(Weight(LocalDate.now().toString(), kg))
     }
 
-    fun saveServer(s: ServerConfig) {
-        prefs.server = s
+    private val _account = MutableStateFlow(prefs.accountEmail)
+    val account: StateFlow<String?> = _account.asStateFlow()
+    private val _authError = MutableStateFlow<String?>(null)
+    val authError: StateFlow<String?> = _authError.asStateFlow()
+
+    /** Starts Google sign-in; when the user has to pick an account, [launch] opens the system screen. */
+    fun signIn(launch: (android.app.PendingIntent) -> Unit) = viewModelScope.launch {
+        _authError.value = null
+        try {
+            when (val r = GoogleAuth.authorize(getApplication())) {
+                is GoogleAuth.Result.NeedsUser -> launch(r.intent)
+                is GoogleAuth.Result.Token -> finishSignIn(r.accessToken)
+            }
+        } catch (e: Exception) {
+            _authError.value = "Не удалось войти: ${e.message}"
+        }
+    }
+
+    fun onSignInResult(data: android.content.Intent?) = viewModelScope.launch {
+        try {
+            val token = GoogleAuth.tokenFromIntent(getApplication(), data)
+            if (token != null) finishSignIn(token) else _authError.value = "Вход отменён"
+        } catch (e: Exception) {
+            _authError.value = "Вход отменён"
+        }
+    }
+
+    private suspend fun finishSignIn(token: String) {
+        val email = GoogleAuth.email(token)
+        if (prefs.accountEmail != email) {
+            // another account means another spreadsheet
+            prefs.sheetId = null
+            prefs.lastSheetSync = 0
+        }
+        prefs.accountEmail = email
+        _account.value = email
         SyncWorker.enqueue(getApplication())
     }
+
+    fun signOut() {
+        prefs.accountEmail = null
+        _account.value = null
+    }
+
+    fun sheetUrl(): String? = prefs.sheetId?.let { Sheets.url(it) }
+
+    /** A tap on one of the AI's answer buttons: the entry goes back to the AI with the answer. */
+    fun answer(entry: Entry, option: String) = viewModelScope.launch {
+        db.entries().update(
+            entry.copy(status = EntryStatus.QUEUED, answer = option, updatedAt = System.currentTimeMillis())
+        )
+        SyncWorker.enqueue(getApplication())
+    }
+
+    fun syncNow() = SyncWorker.enqueue(getApplication())
 
     fun checkUpdate(silent: Boolean = false) {
         if (_update.value is UpdateState.Checking || _update.value is UpdateState.Downloading) return

@@ -11,6 +11,8 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Update
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 
@@ -50,6 +52,10 @@ data class Entry(
     val updatedAt: Long = System.currentTimeMillis(),
     val editedByUser: Boolean = false,
     val synced: Boolean = false,
+    /** A clarifying question from the AI and its button options (JSON array), answered with [answer]. */
+    val question: String? = null,
+    val options: String? = null,
+    val answer: String? = null,
 )
 
 @Entity(tableName = "weights")
@@ -83,6 +89,13 @@ interface EntryDao {
     @Query("SELECT * FROM entries WHERE synced = 0 ORDER BY createdAt")
     suspend fun unsynced(): List<Entry>
 
+    /** Food the AI still has to count: new entries and those whose question was just answered. */
+    @Query("SELECT * FROM entries WHERE type = 'food' AND status IN ('queued', 'processing') ORDER BY createdAt")
+    suspend fun forAi(): List<Entry>
+
+    @Query("SELECT * FROM entries ORDER BY day, createdAt")
+    suspend fun all(): List<Entry>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: Entry)
 
@@ -108,7 +121,15 @@ interface WeightDao {
     suspend fun upsert(weight: Weight)
 }
 
-@Database(entities = [Entry::class, Weight::class], version = 1, exportSchema = false)
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE entries ADD COLUMN question TEXT")
+        db.execSQL("ALTER TABLE entries ADD COLUMN options TEXT")
+        db.execSQL("ALTER TABLE entries ADD COLUMN answer TEXT")
+    }
+}
+
+@Database(entities = [Entry::class, Weight::class], version = 2, exportSchema = false)
 abstract class AppDb : RoomDatabase() {
     abstract fun entries(): EntryDao
     abstract fun weights(): WeightDao
@@ -118,6 +139,7 @@ abstract class AppDb : RoomDatabase() {
 
         fun get(context: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "calcalc.db")
+                .addMigrations(MIGRATION_1_2)
                 .build().also { instance = it }
         }
     }

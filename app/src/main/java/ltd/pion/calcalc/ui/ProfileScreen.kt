@@ -1,5 +1,10 @@
 package ltd.pion.calcalc.ui
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,12 +32,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ltd.pion.calcalc.BuildConfig
 import ltd.pion.calcalc.data.Profile
-import ltd.pion.calcalc.data.ServerConfig
 import ltd.pion.calcalc.domain.Norm
 import ltd.pion.calcalc.update.UpdateState
 
@@ -47,9 +52,13 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
     var height by remember(p0) { mutableStateOf(p0.heightCm.toString()) }
     var goal by remember(p0) { mutableStateOf(p0.goal) }
     var weight by remember(w0) { mutableStateOf(trimKg(w0)) }
-    val server = remember { vm.prefs.server }
-    var url by remember { mutableStateOf(server.scriptUrl) }
-    var token by remember { mutableStateOf(server.token) }
+    val account by vm.account.collectAsState()
+    val authError by vm.authError.collectAsState()
+    var url by remember { mutableStateOf(vm.prefs.aiUrl) }
+    val ctx = LocalContext.current
+    val signInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+        vm.onSignInResult(it.data)
+    }
     var autoDl by remember { mutableStateOf(vm.prefs.autoDownloadOnWifi) }
 
     val draft = Profile(male, year.toIntOrNull() ?: p0.birthYear, height.toIntOrNull() ?: p0.heightCm, goal)
@@ -79,14 +88,33 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
         Button({ vm.saveProfile(draft, kg); onSaved() }, Modifier.fillMaxWidth()) { Text("Сохранить") }
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
-        Text("Связь с ИИ на компьютере", style = MaterialTheme.typography.titleMedium)
-        Text(
-            "Адрес веб-приложения Google Apps Script и ваш токен. Без них записи хранятся на телефоне и ждут.",
-            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Text("Аккаунт Google", style = MaterialTheme.typography.titleMedium)
+        if (account == null) {
+            Text(
+                "Войдите, чтобы ИИ считал калории еды, а дневник сохранялся в вашу таблицу на Google Диске.",
+                fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button({
+                vm.signIn { pi -> signInLauncher.launch(IntentSenderRequest.Builder(pi.intentSender).build()) }
+            }, Modifier.fillMaxWidth()) { Text("Войти через Google") }
+        } else {
+            Text("Вы вошли как $account")
+            vm.sheetUrl()?.let { u ->
+                OutlinedButton({ ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) }, Modifier.fillMaxWidth()) {
+                    Text("Открыть мою таблицу")
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton({ vm.syncNow() }, Modifier.weight(1f)) { Text("Синхронизировать") }
+                OutlinedButton({ vm.signOut() }, Modifier.weight(1f)) { Text("Выйти") }
+            }
+        }
+        authError?.let { Text(it, color = Warn) }
+        OutlinedTextField(
+            url, { url = it; vm.prefs.aiUrl = it }, Modifier.fillMaxWidth(),
+            label = { Text("Адрес ИИ-скрипта (…/exec)") }, singleLine = true,
+            supportingText = { Text("Обычно уже заполнен, менять не нужно") },
         )
-        OutlinedTextField(url, { url = it }, Modifier.fillMaxWidth(), label = { Text("Адрес скрипта (…/exec)") }, singleLine = true)
-        OutlinedTextField(token, { token = it }, Modifier.fillMaxWidth(), label = { Text("Токен") }, singleLine = true)
-        OutlinedButton({ vm.saveServer(ServerConfig(url, token)) }, Modifier.fillMaxWidth()) { Text("Сохранить и синхронизировать") }
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Text("Обновления", style = MaterialTheme.typography.titleMedium)

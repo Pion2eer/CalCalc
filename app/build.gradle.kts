@@ -18,6 +18,8 @@ android {
         targetSdk = 35
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
+        // Dimon's Apps Script web app that checks the Google account and calls the AI on the PC
+        buildConfigField("String", "AI_SCRIPT_URL", "\"${System.getenv("AI_SCRIPT_URL") ?: ""}\"")
         buildConfigField(
             "String", "UPDATE_URL",
             "\"${System.getenv("UPDATE_URL") ?: "https://github.com/Pion2eer/CalCalc/releases/latest/download/version.json"}\""
@@ -72,6 +74,8 @@ dependencies {
 
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
 
     testImplementation("junit:junit:4.13.2")
 }

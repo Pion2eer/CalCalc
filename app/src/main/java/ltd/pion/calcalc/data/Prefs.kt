@@ -2,6 +2,7 @@ package ltd.pion.calcalc.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import ltd.pion.calcalc.BuildConfig
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -14,10 +15,6 @@ data class Profile(
     val goal: Int = 0,
 )
 
-data class ServerConfig(
-    val scriptUrl: String = "",
-    val token: String = "",
-)
 
 class Prefs(context: Context) {
     private val sp: SharedPreferences = context.getSharedPreferences("calcalc", Context.MODE_PRIVATE)
@@ -36,9 +33,24 @@ class Prefs(context: Context) {
             .putInt("goal", p.goal)
             .apply()
 
-    var server: ServerConfig
-        get() = ServerConfig(sp.getString("scriptUrl", "") ?: "", sp.getString("token", "") ?: "")
-        set(s) = sp.edit().putString("scriptUrl", s.scriptUrl.trim()).putString("token", s.token.trim()).apply()
+    /** Address of the shared AI script; empty means the one built into the app. */
+    var aiUrl: String
+        get() = (sp.getString("aiUrl", "") ?: "").ifBlank { BuildConfig.AI_SCRIPT_URL }
+        set(v) = sp.edit().putString("aiUrl", v.trim()).apply()
+
+    /** The Google account the user signed in with; null until they do. */
+    var accountEmail: String?
+        get() = sp.getString("accountEmail", null)
+        set(v) = sp.edit().putString("accountEmail", v).apply()
+
+    /** The user's own CalCalc spreadsheet on their Google Drive. */
+    var sheetId: String?
+        get() = sp.getString("sheetId", null)
+        set(v) = sp.edit().putString("sheetId", v).apply()
+
+    var lastSheetSync: Long
+        get() = sp.getLong("lastSheetSync", 0)
+        set(v) = sp.edit().putLong("lastSheetSync", v).apply()
 
     var autoDownloadOnWifi: Boolean
         get() = sp.getBoolean("autoDownloadOnWifi", true)
