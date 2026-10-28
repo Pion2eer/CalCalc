@@ -5,6 +5,9 @@
  * The PC registers itself every 4 minutes: POST ?action=localReg {url, token, model, paused}. The first
  * registration pins the PC's proxy token; after that only the same token may move the address
  * (to change PCs, delete the PC_TOKEN property).
+ *
+ * Everything that happens is written to the spreadsheet «CalCalc AI журнал» on the owner's Drive, and a
+ * trigger checks the PC every 10 minutes with a test request, so problems can be seen without a phone.
  */
 
 function doPost(e) {
@@ -15,15 +18,76 @@ function doPost(e) {
   try {
     if (action === 'localReg') return out_(localReg_(body));
     if (action === 'parse') return out_(parse_(body));
+    if (action === 'clientLog') return out_(clientLog_(body));
     return out_({ ok: false, error: 'unknown action' });
   } catch (err) {
+    log_('error', '', action + ': ' + err);
     return out_({ ok: false, retry: true, error: String(err) });
   }
 }
 
 function doGet() {
+  ensureTrigger_();
   var pc = pc_();
-  return out_({ ok: true, app: 'CalCalc', pcOnline: !!(pc && fresh_(pc)) });
+  return out_({ ok: true, app: 'CalCalc', pcOnline: !!(pc && fresh_(pc)), log: logUrl_() });
+}
+
+// ---- journal ----
+
+function logSheet_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('LOG_ID');
+  var ss = null;
+  if (id) try { ss = SpreadsheetApp.openById(id); } catch (x) { ss = null; }
+  if (!ss) {
+    ss = SpreadsheetApp.create('CalCalc AI журнал');
+    ss.getSheets()[0].appendRow(['Время', 'Событие', 'Кто', 'Подробности', 'мс']);
+    props.setProperty('LOG_ID', ss.getId());
+  }
+  return ss.getSheets()[0];
+}
+
+function logUrl_() {
+  try { return logSheet_().getParent().getUrl(); } catch (x) { return null; }
+}
+
+/** One row per event; the oldest rows go once there are more than 3000. */
+function log_(event, who, details, ms) {
+  try {
+    var sh = logSheet_();
+    sh.appendRow([new Date(), event, who || '', String(details || '').slice(0, 1000), ms == null ? '' : ms]);
+    var n = sh.getLastRow();
+    if (n > 3200) sh.deleteRows(2, n - 3000);
+  } catch (x) {}
+}
+
+// ---- self-test every 10 minutes ----
+
+function ensureTrigger_() {
+  var has = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'selfTest'; });
+  if (!has) {
+    ScriptApp.newTrigger('selfTest').timeBased().everyMinutes(10).create();
+    log_('setup', '', 'самопроверка включена, раз в 10 минут');
+  }
+}
+
+/** Asks the PC about a known food and writes how it went; run by the trigger, or by hand from the editor. */
+function selfTest() {
+  ensureTrigger_();
+  var pc = pc_();
+  if (!pc) return log_('selftest', '', 'ПК ни разу не регистрировался');
+  var age = Math.round((Date.now() - pc.at) / 60000);
+  if (!fresh_(pc)) return log_('selftest', '', 'ПК не на связи, последняя регистрация ' + age + ' мин назад');
+  if (pc.paused) return log_('selftest', '', 'ИИ на паузе');
+  var t0 = Date.now();
+  var a = askPc_(pc, 'яблоко 150 г');
+  log_('selftest', '', a.ok ? 'ок: ' + a.title + ', ' + a.kcal + ' ккал' : 'ошибка: ' + a.error, Date.now() - t0);
+}
+
+function clientLog_(b) {
+  var email = caller_(b.accessToken) || '?';
+  log_('app', email, b.message);
+  return { ok: true };
 }
 
 function localReg_(b) {
@@ -36,6 +100,8 @@ function localReg_(b) {
     if (!pinned) props.setProperty('PC_TOKEN', b.token);
     else if (pinned !== b.token) return { ok: false, error: 'bad token' };
   } finally { lock.releaseLock(); }
+  var old = pc_();
+  if (!old || old.url !== String(b.url).replace(/\/+$/, '') || !fresh_(old)) log_('pc', '', 'ПК на связи: ' + b.url + (b.paused ? ' (пауза)' : ''));
   props.setProperty('PC', JSON.stringify({
     url: String(b.url || '').replace(/\/+$/, ''), token: b.token, model: b.model || 'gemma4:12b-it-qat',
     paused: !!b.paused, at: Date.now(),
@@ -85,14 +151,30 @@ var PROMPT =
 
 function parse_(b) {
   var email = caller_(b.accessToken);
-  if (!email) return { ok: false, error: 'Войдите через Google заново' };
-  if (!allowed_(email)) return { ok: false, error: 'Нет доступа к ИИ для ' + email };
+  if (!email) {
+    log_('parse', '?', 'токен Google не прошёл проверку');
+    return { ok: false, error: 'Войдите через Google заново' };
+  }
+  if (!allowed_(email)) {
+    log_('parse', email, 'нет в списке ALLOWED');
+    return { ok: false, error: 'Нет доступа к ИИ для ' + email };
+  }
   var text = String(b.text || '').slice(0, 1000);
   if (!text) return { ok: false, error: 'empty' };
 
   var pc = pc_();
-  if (!pc || !fresh_(pc) || pc.paused) return { ok: false, retry: true, error: 'Компьютер с ИИ недоступен' };
+  if (!pc || !fresh_(pc) || pc.paused) {
+    var why = !pc ? 'ПК ни разу не регистрировался' : pc.paused ? 'ИИ на паузе' : 'ПК не на связи ' + Math.round((Date.now() - pc.at) / 60000) + ' мин';
+    log_('parse', email, text + ' → ' + why);
+    return { ok: false, retry: true, error: 'Компьютер с ИИ недоступен' };
+  }
+  var t0 = Date.now();
+  var res = askPc_(pc, text);
+  log_('parse', email, text + ' → ' + (res.ok ? res.title + ', ' + res.kcal + ' ккал' + (res.question ? ', вопрос: ' + res.question : '') : 'ошибка: ' + res.error), Date.now() - t0);
+  return res;
+}
 
+function askPc_(pc, text) {
   var r;
   try {
     r = UrlFetchApp.fetch(pc.url + '/chat', {
@@ -104,17 +186,17 @@ function parse_(b) {
       }),
     });
   } catch (x) {
-    return { ok: false, retry: true, error: 'Компьютер с ИИ недоступен' };
+    return { ok: false, retry: true, error: 'Компьютер с ИИ недоступен: ' + String(x).slice(0, 150) };
   }
   var code = r.getResponseCode();
-  if (code !== 200) return { ok: false, retry: code >= 500 || code === 429, error: 'ИИ: HTTP ' + code };
+  if (code !== 200) return { ok: false, retry: code >= 500 || code === 429, error: 'ИИ: HTTP ' + code + ' ' + r.getContentText().slice(0, 150) };
 
   var a;
   try {
     var msg = JSON.parse(r.getContentText()).message.content;
     a = JSON.parse(msg.slice(msg.indexOf('{'), msg.lastIndexOf('}') + 1));
   } catch (x) {
-    return { ok: false, error: 'ИИ ответил непонятно' };
+    return { ok: false, error: 'ИИ ответил непонятно: ' + r.getContentText().slice(0, 150) };
   }
   var kcal = Math.round(Number(a.kcal));
   if (!isFinite(kcal) || kcal < 0 || kcal > 10000) return { ok: false, error: 'ИИ не смог оценить' };

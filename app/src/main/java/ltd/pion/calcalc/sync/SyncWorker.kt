@@ -41,6 +41,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 val a = try {
                     Ai.parse(prefs.aiUrl, token, aiText(e), weight)
                 } catch (ex: Exception) {
+                    report(prefs, token, "parse failed: $ex")
                     prefs.aiProblem = "Нет связи с ИИ, записи посчитаются позже"
                     again = true
                     break
@@ -84,9 +85,22 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         try {
             mirrorSheet(prefs, token, weight)
         } catch (ex: Exception) {
+            report(prefs, token, "sheet sync failed: $ex")
             again = true
         }
         return if (again) Result.retry() else Result.success()
+    }
+
+    /** Errors go to the journal of the AI script, so they can be looked at without the phone. */
+    private suspend fun report(prefs: Prefs, token: String, message: String) {
+        if (prefs.aiUrl.isBlank()) return
+        runCatching {
+            Script.post(
+                prefs.aiUrl,
+                org.json.JSONObject().put("action", "clientLog").put("accessToken", token)
+                    .put("message", "${ltd.pion.calcalc.BuildConfig.VERSION_NAME}: ${message.take(500)}").toString(),
+            )
+        }
     }
 
     private fun aiText(e: Entry) =
