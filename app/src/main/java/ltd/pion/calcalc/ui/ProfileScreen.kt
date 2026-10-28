@@ -116,7 +116,7 @@ fun ProfileContent(
                 FilterChip(!male, { male = false }, { Text("Женщина") })
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NumberField("Год рождения", year, Modifier.weight(1f)) { year = it }
+                NumberField("Год рожд.", year, Modifier.weight(1f)) { year = it }
                 NumberField("Рост, см", height, Modifier.weight(1f)) { height = it }
                 NumberField("Вес, кг", weight, Modifier.weight(1f), decimal = true) { weight = it }
             }
@@ -154,10 +154,8 @@ fun ProfileContent(
                 sheetUrl?.let { u ->
                     OutlinedButton({ onOpenSheet(u) }, Modifier.fillMaxWidth()) { Text("Открыть мою таблицу") }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onSync, Modifier.weight(1f)) { Text("Синхронизировать") }
-                    TextButton(onSignOut, Modifier.weight(1f)) { Text("Выйти") }
-                }
+                OutlinedButton(onSync, Modifier.fillMaxWidth()) { Text("Синхронизировать сейчас") }
+                TextButton(onSignOut, Modifier.fillMaxWidth()) { Text("Выйти из аккаунта") }
             }
             authError?.let { Text(it, color = Warn, fontSize = 13.sp) }
         }
@@ -195,7 +193,7 @@ fun ProfileContent(
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
-    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             content()

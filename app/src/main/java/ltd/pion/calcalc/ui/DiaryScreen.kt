@@ -92,7 +92,7 @@ fun DiaryContent(totals: List<DayTotal>, norm: Int, today: LocalDate, modifier: 
             )
         }
         if (days.isNotEmpty()) item {
-            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface) {
                 Column {
                     days.forEachIndexed { i, t ->
                         if (i > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.background)
@@ -106,7 +106,7 @@ fun DiaryContent(totals: List<DayTotal>, norm: Int, today: LocalDate, modifier: 
 
 @Composable
 private fun Card(content: @Composable () -> Unit) {
-    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) { content() }
     }
 }

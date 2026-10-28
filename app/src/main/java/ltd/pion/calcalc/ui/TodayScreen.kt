@@ -151,7 +151,7 @@ fun TodayContent(
                     item(key = "g$name") {
                         Surface(
                             Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                            shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface,
                         ) {
                             Column { list.forEach { EntryRow(it, onClick = { onOpen(it) }) } }
                         }
@@ -191,7 +191,7 @@ private fun DayHeader(day: LocalDate, today: LocalDate, onShiftDay: (Long) -> Un
 private fun SummaryCard(s: DaySummary, entries: List<Entry>) {
     Surface(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         Column(Modifier.padding(vertical = 16.dp, horizontal = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -372,13 +372,13 @@ private fun EmptyHint() {
 private fun InputBar(input: String, onInput: (String) -> Unit, onSend: () -> Unit, onQuick: (String) -> Unit) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.height(8.dp))
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(QuickAdds) { q ->
                     Surface(
                         onClick = { onQuick(q) }, shape = RoundedCornerShape(50),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface,
                     ) {
                         Text(q, Modifier.padding(horizontal = 14.dp, vertical = 8.dp), fontSize = 14.sp)
                     }
