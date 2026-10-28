@@ -19,7 +19,10 @@ android {
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
         // Dimon's Apps Script web app that checks the Google account and calls the AI on the PC
-        buildConfigField("String", "AI_SCRIPT_URL", "\"${System.getenv("AI_SCRIPT_URL") ?: ""}\"")
+        buildConfigField(
+            "String", "AI_SCRIPT_URL",
+            "\"${System.getenv("AI_SCRIPT_URL") ?: "https://script.google.com/macros/s/AKfycbzE0ufh5WieWkcuynZHBULn9hdi17bwiqTLVMqiTNResVg7-HzO17Gy91PsQyhDUali/exec"}\""
+        )
         buildConfigField(
             "String", "UPDATE_URL",
             "\"${System.getenv("UPDATE_URL") ?: "https://github.com/Pion2eer/CalCalc/releases/latest/download/version.json"}\""
