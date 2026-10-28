@@ -7,6 +7,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
@@ -122,14 +123,18 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     }
 
     companion object {
-        // REPLACE, not APPEND: after failed tries the old request sits in its backoff (minutes, later hours), and an
-        // appended one would wait behind it; a fresh entry has to go to the AI right away
+        // A request waiting in its backoff (minutes, later hours) is replaced, so a fresh entry goes to the AI right
+        // away; a running one is not cancelled, because that throws away the AI's answer and asks it again
         fun enqueue(context: Context) {
             val req = OneTimeWorkRequestBuilder<SyncWorker>()
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
                 .build()
-            WorkManager.getInstance(context).enqueueUniqueWork("sync", ExistingWorkPolicy.REPLACE, req)
+            val wm = WorkManager.getInstance(context)
+            val running = runCatching {
+                wm.getWorkInfosForUniqueWork("sync").get().any { it.state == WorkInfo.State.RUNNING }
+            }.getOrDefault(false)
+            wm.enqueueUniqueWork("sync", if (running) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.REPLACE, req)
         }
     }
 }
