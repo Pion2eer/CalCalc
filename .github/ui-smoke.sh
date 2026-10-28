@@ -40,6 +40,7 @@ shot d4c_edit_rewritten
 adb shell input keyevent 4; sleep 1; adb shell input keyevent 4; sleep 2
 # the two backs can leave the app when the keyboard was already hidden: bring it to the front again
 adb shell am start -W -n ltd.pion.calcalc/.ui.MainActivity; sleep 2
+tap_text "Сегодня"; sleep 2
 adb shell input swipe 200 1000 900 1000 250; sleep 2
 shot d4d_swiped_to_yesterday
 adb shell input swipe 900 1000 200 1000 250; sleep 2
