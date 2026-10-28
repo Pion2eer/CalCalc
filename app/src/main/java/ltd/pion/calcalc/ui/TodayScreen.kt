@@ -147,7 +147,7 @@ fun TodayContent(
                 item { EmptyHint() }
             } else {
                 mealGroups(entries).forEach { (name, list) ->
-                    item(key = "h$name") { SectionTitle(name, list.mapNotNull { it.kcal }.sum()) }
+                    item(key = "h$name") { SectionTitle(name, if (list.all { it.kcal == null }) null else list.mapNotNull { it.kcal }.sum()) }
                     item(key = "g$name") {
                         Surface(
                             Modifier.fillMaxWidth().padding(horizontal = 16.dp),

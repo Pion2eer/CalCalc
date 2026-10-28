@@ -79,7 +79,8 @@ jobs:
           N: ${{ github.run_number }}
         run: |
           sha=$(sha256sum CalCalc.apk | cut -d' ' -f1)
-          notes=$(git log -1 --pretty=%s | sed 's/"/\\"/g')
+          # what's new, in Russian, for the update banner; empty when the file is missing
+          notes=$(cat .github/release-notes.txt 2>/dev/null | tr '\n' ' ' | sed 's/"/\\"/g; s/ *$//')
           url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v0.1.$N/CalCalc.apk"
           printf '{"versionCode":%s,"versionName":"0.1.%s","apkUrl":"%s","sha256":"%s","notes":"%s"}\n' "$N" "$N" "$url" "$sha" "$notes" > version.json
           gh release create "v0.1.$N" CalCalc.apk version.json --title "CalCalc 0.1.$N" --notes "$notes" --latest
