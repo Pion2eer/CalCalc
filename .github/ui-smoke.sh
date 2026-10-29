@@ -24,6 +24,8 @@ adb shell pm grant ltd.pion.calcalc android.permission.POST_NOTIFICATIONS || tru
 adb shell am start -W -n ltd.pion.calcalc/.ui.MainActivity
 sleep 6
 shot d1_first_start
+# a slow emulator sometimes shows «Pixel Launcher isn't responding» on top: let it wait
+tap_text "Wait"; sleep 1
 tap_text "Сегодня"; sleep 2
 shot d2_today
 tap_text "Сказать голосом"; sleep 3
