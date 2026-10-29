@@ -200,7 +200,8 @@ function parse_(b) {
   }
   var t0 = Date.now();
   var res = askPc_(pc, text, image);
-  log_('parse', email, (image ? '[фото] ' : '') + text + ' → ' + (res.ok ? res.title + ', ' + res.kcal + ' ккал' + (res.question ? ', вопрос: ' + res.question : '') : 'ошибка: ' + res.error), Date.now() - t0);
+  log_('parse', email, (image ? '[фото] ' : '') + text + ' → ' + (res.ok ? res.title + ', ' + res.kcal + ' ккал' + (res.question ? ', вопрос: ' + res.question : '') : 'ошибка: ' + res.error + (res.detail ? ' (' + res.detail + ')' : '')), Date.now() - t0);
+  delete res.detail;
   return res;
 }
 
@@ -220,7 +221,8 @@ function askPc_(pc, text, image) {
       }),
     });
   } catch (x) {
-    return { ok: false, retry: true, error: 'Компьютер с ИИ недоступен: ' + String(x).slice(0, 150) };
+    // the phone gets a short reason; the technical one goes to the journal
+    return { ok: false, retry: true, error: 'Компьютер с ИИ не ответил, попробую ещё раз', detail: String(x).slice(0, 150) };
   }
   var code = r.getResponseCode();
   if (code !== 200) return { ok: false, retry: code >= 500 || code === 429, error: 'ИИ: HTTP ' + code + ' ' + r.getContentText().slice(0, 150) };
