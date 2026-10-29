@@ -308,7 +308,7 @@ private fun DayPage(
 
 @Composable
 private fun DayHeader(day: LocalDate, today: LocalDate, onShiftDay: (Long) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp)) {
+    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -317,7 +317,7 @@ private fun DayHeader(day: LocalDate, today: LocalDate, onShiftDay: (Long) -> Un
                         today.minusDays(1) -> "Вчера"
                         else -> day.format(monthFmt).replaceFirstChar { it.uppercase() }
                     },
-                    fontSize = 26.sp, fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp, fontWeight = FontWeight.Bold,
                 )
                 Text(
                     day.format(dayFmt).replaceFirstChar { it.uppercase() }, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -347,7 +347,7 @@ private fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 @Composable
 private fun WeekStrip(day: LocalDate, today: LocalDate, onShiftDay: (Long) -> Unit) {
     val monday = day.minusDays(day.dayOfWeek.value - 1L)
-    Row(Modifier.fillMaxWidth().padding(top = 12.dp, end = 8.dp, bottom = 4.dp)) {
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp, end = 8.dp, bottom = 2.dp)) {
         (0..6).map { monday.plusDays(it.toLong()) }.forEach { d ->
             val selected = d == day
             val future = d.isAfter(today)
@@ -355,7 +355,7 @@ private fun WeekStrip(day: LocalDate, today: LocalDate, onShiftDay: (Long) -> Un
                 Modifier.weight(1f).padding(horizontal = 2.dp).clip(RoundedCornerShape(16.dp))
                     .background(if (selected) HeroBg else Color.Transparent)
                     .clickable(enabled = !future && !selected) { onShiftDay(ChronoUnit.DAYS.between(day, d)) }
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 val c = when {
@@ -379,16 +379,16 @@ private fun WeekStrip(day: LocalDate, today: LocalDate, onShiftDay: (Long) -> Un
 private fun SummaryCard(s: DaySummary, entries: List<Entry>, aiBlocker: String?) {
     // the dark accent card of the reference design: the day's main numbers
     Surface(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
         shape = RoundedCornerShape(28.dp), color = HeroBg, contentColor = Color.White, shadowElevation = CardShadow,
     ) {
-        Column(Modifier.padding(vertical = 18.dp, horizontal = 12.dp)) {
+        Column(Modifier.padding(vertical = 14.dp, horizontal = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SideStat("Съедено", s.eaten, Color.White, Modifier.weight(1f))
                 Ring(s)
                 SideStat("Сожжено", s.burned, Color(0xFFFFB74D), Modifier.weight(1f))
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
             val p = entries.sumOf { it.protein ?: 0.0 }
             val f = entries.sumOf { it.fat ?: 0.0 }
             val c = entries.sumOf { it.carbs ?: 0.0 }
@@ -433,16 +433,16 @@ private fun Ring(s: DaySummary) {
     val over = s.left < 0
     val track = Color.White.copy(alpha = 0.12f)
     val arc = if (over) Over else Color(0xFF3DDC84)
-    Box(Modifier.size(140.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(118.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            val w = 12.dp.toPx()
+            val w = 10.dp.toPx()
             val box = Size(size.width - w, size.height - w)
             val tl = Offset(w / 2, w / 2)
             drawArc(track, -90f, 360f, false, tl, box, style = Stroke(w))
             if (frac > 0f) drawArc(arc, -90f, 360f * frac, false, tl, box, style = Stroke(w, cap = StrokeCap.Round))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("${kotlin.math.abs(s.left)}", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = if (over) Color(0xFFFF7A75) else Color.White)
+            Text("${kotlin.math.abs(s.left)}", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = if (over) Color(0xFFFF7A75) else Color.White)
             Text(if (over) "ккал сверх" else "ккал осталось", color = HeroMuted, fontSize = 12.sp)
         }
     }
