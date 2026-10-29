@@ -233,6 +233,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             prefs.lastSheetSync = 0
         }
         prefs.accountEmail = email
+        prefs.aiProblem = null
         _account.value = email
         SyncWorker.enqueue(getApplication())
     }

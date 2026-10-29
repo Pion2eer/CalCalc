@@ -33,7 +33,14 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     override suspend fun doWork(): Result {
         val prefs = Prefs(applicationContext)
         if (prefs.accountEmail == null) return Result.success()
-        val token = GoogleAuth.silentToken(applicationContext) ?: return Result.success()
+        val token = GoogleAuth.silentToken(applicationContext)
+        if (token == null) {
+            // Google wants the user to confirm the sign-in again: say so on the screen and in the journal, instead of
+            // leaving the food waiting without a word
+            prefs.aiProblem = "Google просит войти заново: «Профиль» → «Войти через Google»"
+            report(prefs, "", "no Google token for ${prefs.accountEmail}")
+            return Result.success()
+        }
         val db = AppDb.get(applicationContext)
         val weight = db.weights().latest().first()?.kg ?: 75.0
 
