@@ -71,14 +71,14 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                         now.copy(
                             status = EntryStatus.NEEDS_ANSWER, question = a.question,
                             options = JSONArray(a.options).toString(),
-                            kcal = a.kcal, estimated = a.kcal != null, title = a.title ?: now.title,
+                            kcal = a.kcal, estimated = a.kcal != null, title = a.title ?: now.title, items = a.items,
                             updatedAt = System.currentTimeMillis(),
                         )
                     )
                     a.ok -> db.entries().update(
                         now.copy(
                             status = EntryStatus.DONE, kcal = a.kcal, estimated = false,
-                            title = a.title ?: now.title, protein = a.protein, fat = a.fat, carbs = a.carbs,
+                            title = a.title ?: now.title, protein = a.protein, fat = a.fat, carbs = a.carbs, items = a.items,
                             question = null, options = null, updatedAt = System.currentTimeMillis(),
                         )
                     )

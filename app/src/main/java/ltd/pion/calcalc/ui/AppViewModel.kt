@@ -175,15 +175,43 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** One tap on a quick button: the same food again, already counted. */
-    fun repeat(t: Template) = viewModelScope.launch {
+    /** One tap on a quick button: the same food again, already counted; [factor] is the portion (×0.5, ×2). */
+    fun repeat(t: Template, factor: Double = 1.0) = viewModelScope.launch {
+        fun scale(v: Double?) = v?.let { Math.round(it * factor * 10) / 10.0 }
+        val title = if (factor == 1.0) t.title else t.title + " ×" + (if (factor % 1.0 == 0.0) factor.toInt().toString() else factor.toString().replace('.', ','))
         db.entries().upsert(
             Entry(
-                type = t.type, rawText = t.rawText, title = t.title, kcal = t.kcal,
-                protein = t.protein, fat = t.fat, carbs = t.carbs, status = EntryStatus.DONE, day = _day.value.toString(),
+                type = t.type, rawText = t.rawText, title = title, kcal = Math.round(t.kcal * factor).toInt(),
+                protein = scale(t.protein), fat = scale(t.fat), carbs = scale(t.carbs), status = EntryStatus.DONE, day = _day.value.toString(),
             )
         )
         SyncWorker.enqueue(getApplication())
+    }
+
+    /** A past meal (or a whole day) once more today, with the same numbers. */
+    fun repeatToToday(list: List<Entry>) = viewModelScope.launch {
+        val today = LocalDate.now().toString()
+        list.filter { it.kcal != null }.forEach {
+            db.entries().upsert(
+                it.copy(
+                    id = java.util.UUID.randomUUID().toString(), day = today, status = EntryStatus.DONE, photo = null,
+                    synced = false, createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis(),
+                )
+            )
+        }
+        SyncWorker.enqueue(getApplication())
+    }
+
+    private val query = MutableStateFlow("")
+
+    /** Food from the history that matches what is being typed. */
+    val suggestions: StateFlow<List<QuickItem>> = query.flatMapLatest { q ->
+        if (q.length < 2) kotlinx.coroutines.flow.flowOf(emptyList())
+        else db.entries().search(q).map { list -> list.map { QuickItem(it, favorites.value.any { f -> f.title == it.title }) } }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun setQuery(q: String) {
+        query.value = q.trim()
     }
 
     /** A photo of the food from the camera: shrunk and kept with the entry, the AI counts it from the picture. */
@@ -239,9 +267,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         SyncWorker.enqueue(getApplication())
     }
 
-    fun delete(entry: Entry) = viewModelScope.launch {
+    fun delete(entry: Entry, keepPhoto: Boolean = false) = viewModelScope.launch {
         db.entries().delete(entry.id)
-        entry.photo?.let { java.io.File(it).delete() }
+        if (!keepPhoto) entry.photo?.let { java.io.File(it).delete() }
+    }
+
+    /** «Отменить» after a swipe: the entry comes back as it was. */
+    fun restore(entry: Entry) = viewModelScope.launch {
+        db.entries().upsert(entry)
+        SyncWorker.enqueue(getApplication())
     }
 
     fun saveProfile(p: Profile, weightKg: Double?) = viewModelScope.launch {

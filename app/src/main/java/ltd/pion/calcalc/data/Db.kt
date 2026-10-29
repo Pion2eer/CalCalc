@@ -58,6 +58,8 @@ data class Entry(
     val answer: String? = null,
     /** A photo of the food, a JPEG in the app's files: it goes to the AI with the text. */
     val photo: String? = null,
+    /** What the AI counted: JSON [{name, grams, kcal}]. */
+    val items: String? = null,
 )
 
 @Entity(tableName = "weights")
@@ -115,6 +117,15 @@ interface EntryDao {
            GROUP BY title HAVING COUNT(*) >= 2 ORDER BY COUNT(*) DESC, MAX(createdAt) DESC LIMIT 8"""
     )
     fun frequent(since: Long): Flow<List<Template>>
+
+    /** Counted food whose name or text contains [q], newest first: suggestions while typing. */
+    @Query(
+        """SELECT title, rawText, type, kcal, protein, fat, carbs FROM entries
+           WHERE type IN ('food', 'manual') AND status = 'done' AND kcal > 0
+             AND (title LIKE '%' || :q || '%' OR rawText LIKE '%' || :q || '%')
+           GROUP BY title ORDER BY MAX(createdAt) DESC LIMIT 8"""
+    )
+    fun search(q: String): Flow<List<Template>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: Entry)
@@ -194,13 +205,19 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
     }
 }
 
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE entries ADD COLUMN items TEXT")
+    }
+}
+
 val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE entries ADD COLUMN photo TEXT")
     }
 }
 
-@Database(entities = [Entry::class, Weight::class, Favorite::class], version = 4, exportSchema = false)
+@Database(entities = [Entry::class, Weight::class, Favorite::class], version = 5, exportSchema = false)
 abstract class AppDb : RoomDatabase() {
     abstract fun entries(): EntryDao
     abstract fun weights(): WeightDao
@@ -211,7 +228,7 @@ abstract class AppDb : RoomDatabase() {
 
         fun get(context: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "calcalc.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build().also { instance = it }
         }
     }

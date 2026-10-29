@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+
 package ltd.pion.calcalc.ui
 
 import androidx.compose.foundation.Canvas
@@ -58,6 +60,23 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.runtime.key
+import kotlin.math.roundToInt
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.SwipeToDismissBox
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.layout.ContentScale
@@ -115,22 +134,42 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
     var editing by remember { mutableStateOf<Entry?>(null) }
     val favs by vm.favorites.collectAsState()
     val quick by vm.quick.collectAsState()
+    val suggestions by vm.suggestions.collectAsState()
+    val snack = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
     // steps keep coming in during the day: read them again each time the screen is opened
     LifecycleResumeEffect(Unit) {
         vm.refreshSteps()
         onPauseOrDispose {}
     }
 
+    Box(modifier) {
     TodayContent(
         day = day, today = LocalDate.now(), entries = entries, s = s, update = update, aiBlocker = blocker,
         onShiftDay = vm::shiftDay, onAdd = vm::add, onOpen = { editing = it },
-        onAnswer = { e, o -> vm.answer(e, o) }, onUpdate = vm::downloadAndInstall, modifier = modifier,
+        onAnswer = { e, o -> vm.answer(e, o) }, onUpdate = vm::downloadAndInstall,
         onAddPhoto = { uri, text -> vm.addPhoto(uri, text) },
-        quick = quick, onQuickItem = { vm.repeat(it.template) },
+        quick = quick, onQuickItem = { q, factor -> vm.repeat(q.template, factor) },
+        suggestions = suggestions, onQuery = vm::setQuery,
+        onSwipeDelete = { e ->
+            vm.delete(e, keepPhoto = true)
+            scope.launch {
+                snack.currentSnackbarData?.dismiss()
+                val r = snack.showSnackbar("Удалено: ${e.title}", "Отменить", duration = SnackbarDuration.Short)
+                if (r == SnackbarResult.ActionPerformed) vm.restore(e) else e.photo?.let { java.io.File(it).delete() }
+            }
+        },
+        onRepeatGroup = { name, list ->
+            vm.repeatToToday(list)
+            android.widget.Toast.makeText(ctx, "«$name» добавлен в сегодня", android.widget.Toast.LENGTH_SHORT).show()
+        },
         pageData = { d ->
             remember(d) { vm.dayData(d) }.collectAsState(emptyList<Entry>() to s.copy(eaten = 0, burned = 0, pending = 0)).value
         },
     )
+    SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(bottom = 130.dp))
+    }
 
     editing?.let { e ->
         EntryDialog(
@@ -161,7 +200,11 @@ fun TodayContent(
     initialInput: String = "",
     onAddPhoto: (android.net.Uri, String) -> Unit = { _, _ -> },
     quick: List<QuickItem> = emptyList(),
-    onQuickItem: (QuickItem) -> Unit = {},
+    onQuickItem: (QuickItem, Double) -> Unit = { _, _ -> },
+    suggestions: List<QuickItem> = emptyList(),
+    onQuery: (String) -> Unit = {},
+    onSwipeDelete: (Entry) -> Unit = {},
+    onRepeatGroup: (String, List<Entry>) -> Unit = { _, _ -> },
     /** Entries and totals of any day, for the pages around the shown one; without it only the shown day has data. */
     pageData: (@Composable (LocalDate) -> Pair<List<Entry>, DaySummary>)? = null,
 ) {
@@ -188,10 +231,16 @@ fun TodayContent(
             val d = today.minusDays(page.toLong())
             val (list, sum) = pageData?.invoke(d)
                 ?: if (d == day) entries to s else emptyList<Entry>() to s.copy(eaten = 0, burned = 0, pending = 0)
-            DayPage(d, today, list, sum, aiBlocker, onShiftDay, onOpen, onAnswer)
+            DayPage(d, today, list, sum, aiBlocker, onShiftDay, onOpen, onAnswer, onSwipeDelete, onRepeatGroup)
         }
 
-        InputBar(input, { input = it }, send, onQuick = onAdd, onPhoto = { uri -> onAddPhoto(uri, input); input = "" }, quick = quick, onQuickItem = onQuickItem)
+        LaunchedEffect(input) { onQuery(input) }
+        // while typing, past entries that match come first, so a known dish is one tap away
+        val chips = if (input.trim().length >= 2 && suggestions.isNotEmpty()) suggestions else quick
+        InputBar(
+            input, { input = it }, send, onQuick = onAdd, onPhoto = { uri -> onAddPhoto(uri, input); input = "" },
+            quick = chips, onQuickItem = { q, f -> onQuickItem(q, f); if (chips === suggestions) input = "" },
+        )
     }
 }
 
@@ -208,6 +257,8 @@ private fun DayPage(
     onShiftDay: (Long) -> Unit,
     onOpen: (Entry) -> Unit,
     onAnswer: (Entry, String) -> Unit,
+    onSwipeDelete: (Entry) -> Unit = {},
+    onRepeatGroup: (String, List<Entry>) -> Unit = { _, _ -> },
 ) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 12.dp)) {
         item { DayHeader(day, today, onShiftDay) }
@@ -223,13 +274,24 @@ private fun DayPage(
             item { EmptyHint() }
         } else {
             mealGroups(entries).forEach { (name, list) ->
-                item(key = "h$name") { SectionTitle(name, if (list.all { it.kcal == null }) null else list.mapNotNull { it.kcal }.sum()) }
+                // a past meal can be added to today in one tap: «как вчера на завтрак»
+                val counted = list.filter { it.kcal != null }
+                item(key = "h$name") {
+                    SectionTitle(
+                        name, if (list.all { it.kcal == null }) null else list.mapNotNull { it.kcal }.sum(),
+                        onRepeat = if (day != today && counted.isNotEmpty()) ({ onRepeatGroup(name, counted) }) else null,
+                    )
+                }
                 item(key = "g$name") {
                     Surface(
                         Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                         shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface,
                     ) {
-                        Column { list.forEach { EntryRow(it, waiting = aiBlocker != null, onClick = { onOpen(it) }) } }
+                        Column {
+                            list.forEach { e ->
+                                key(e.id) { SwipeRow(onDelete = { onSwipeDelete(e) }) { EntryRow(e, waiting = aiBlocker != null, onClick = { onOpen(e) }) } }
+                            }
+                        }
                     }
                 }
             }
@@ -347,11 +409,31 @@ private fun Macro(label: String, grams: Double, goal: Double, color: Color, modi
 }
 
 @Composable
-private fun SectionTitle(name: String, kcal: Int?) {
+private fun SectionTitle(name: String, kcal: Int?, onRepeat: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        if (onRepeat != null) TextButton(onRepeat, contentPadding = PaddingValues(horizontal = 8.dp)) {
+            Text("+ в сегодня", fontSize = 13.sp, color = Accent)
+        }
         if (kcal != null) Text(kcalText(kcal), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
     }
+}
+
+/** A row that goes away with a swipe to the left; the screen offers to undo it. */
+@Composable
+private fun SwipeRow(onDelete: () -> Unit, content: @Composable () -> Unit) {
+    val state = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
+        if (v == SwipeToDismissBoxValue.EndToStart) onDelete()
+        v == SwipeToDismissBoxValue.EndToStart
+    })
+    SwipeToDismissBox(
+        state, enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(Modifier.fillMaxSize().background(Over.copy(alpha = 0.85f)).padding(end = 20.dp), contentAlignment = Alignment.CenterEnd) {
+                Icon(Icons.Filled.Delete, "Удалить", tint = Color.White)
+            }
+        },
+    ) { Box(Modifier.background(MaterialTheme.colorScheme.surfaceVariant)) { content() } }
 }
 
 @Composable
@@ -455,7 +537,7 @@ private fun EmptyHint() {
 @Composable
 private fun InputBar(
     input: String, onInput: (String) -> Unit, onSend: () -> Unit, onQuick: (String) -> Unit, onPhoto: (android.net.Uri) -> Unit,
-    quick: List<QuickItem> = emptyList(), onQuickItem: (QuickItem) -> Unit = {},
+    quick: List<QuickItem> = emptyList(), onQuickItem: (QuickItem, Double) -> Unit = { _, _ -> },
 ) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
@@ -463,15 +545,25 @@ private fun InputBar(
             Spacer(Modifier.height(8.dp))
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // starred and frequent food first: one tap adds it again with the same calories
+                // a long press asks for the portion: half, one and a half, double
                 items(quick, key = { "t" + it.template.title }) { q ->
-                    Surface(
-                        onClick = { onQuickItem(q) }, shape = RoundedCornerShape(50),
-                        color = Accent.copy(alpha = 0.15f), contentColor = MaterialTheme.colorScheme.onSurface,
-                    ) {
+                    var portions by remember { mutableStateOf(false) }
+                    Box {
                         Text(
                             (if (q.favorite) "★ " else "") + q.template.title + " · " + q.template.kcal,
-                            Modifier.padding(horizontal = 14.dp, vertical = 8.dp), fontSize = 14.sp, maxLines = 1,
+                            Modifier.clip(RoundedCornerShape(50)).background(Accent.copy(alpha = 0.15f))
+                                .combinedClickable(onClick = { onQuickItem(q, 1.0) }, onLongClick = { portions = true })
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            fontSize = 14.sp, maxLines = 1, color = MaterialTheme.colorScheme.onSurface,
                         )
+                        DropdownMenu(portions, { portions = false }) {
+                            listOf(0.5, 1.5, 2.0).forEach { f ->
+                                DropdownMenuItem(
+                                    { Text("×${if (f % 1.0 == 0.0) f.toInt() else f} · ${(q.template.kcal * f).roundToInt()} ккал") },
+                                    { portions = false; onQuickItem(q, f) },
+                                )
+                            }
+                        }
                     }
                 }
                 items(QuickAdds) { q ->
@@ -616,6 +708,17 @@ fun EntryDialog(
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
+                // what the AI counted, product by product: a wrong guess is easy to spot here
+                val parts = remember(e.items) { itemsOf(e.items) }
+                if (parts.isNotEmpty() && !rewritten) {
+                    Text("Из чего посчитано", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                    parts.forEach { (name, grams, kcal) ->
+                        Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
+                            Text("$name, $grams г", Modifier.weight(1f), fontSize = 14.sp)
+                            Text("$kcal ккал", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
                 Row(Modifier.padding(top = 8.dp)) {
                     if (e.type == EntryType.FOOD && !rewritten) TextButton({ onRewrite(record) }) { Text("Пересчитать ИИ") }
                     Spacer(Modifier.weight(1f))
@@ -635,6 +738,12 @@ fun EntryDialog(
         dismissButton = { TextButton(onDismiss) { Text("Отмена") } },
     )
 }
+
+private fun itemsOf(json: String?): List<Triple<String, Int, Int>> = runCatching {
+    val a = org.json.JSONArray(json ?: return emptyList())
+    (0 until a.length()).map { a.getJSONObject(it) }.map { Triple(it.optString("name"), it.optInt("grams"), it.optInt("kcal")) }
+        .filter { it.first.isNotBlank() }
+}.getOrDefault(emptyList())
 
 @Composable
 fun UpdateBanner(state: UpdateState, onUpdate: () -> Unit) {

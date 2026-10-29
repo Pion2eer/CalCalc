@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ltd.pion.calcalc.data.DayTotal
+import ltd.pion.calcalc.data.Weight
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -47,11 +48,12 @@ private val Bad = Color(0xFFEF5350)
 fun DiaryScreen(vm: AppViewModel, modifier: Modifier) {
     val totals by vm.totals.collectAsState()
     val s by vm.summary.collectAsState()
-    DiaryContent(totals, s.norm, LocalDate.now(), modifier)
+    val weights by vm.weights.collectAsState()
+    DiaryContent(totals, s.norm, LocalDate.now(), modifier, weights)
 }
 
 @Composable
-fun DiaryContent(totals: List<DayTotal>, norm: Int, today: LocalDate, modifier: Modifier = Modifier) {
+fun DiaryContent(totals: List<DayTotal>, norm: Int, today: LocalDate, modifier: Modifier = Modifier, weights: List<Weight> = emptyList()) {
     val byDay = totals.associateBy { it.day }
     val week = (6 downTo 0).map { today.minusDays(it.toLong()) }
     val logged = week.mapNotNull { byDay[it.toString()] }.filter { it.eaten > 0 }
@@ -83,6 +85,8 @@ fun DiaryContent(totals: List<DayTotal>, norm: Int, today: LocalDate, modifier: 
                 WeekChart(week, byDay, norm, today)
             }
         }
+
+        if (weights.isNotEmpty()) item { WeightCard(weights, today) }
 
         val days = totals.filter { it.eaten > 0 || it.burned > 0 }.sortedByDescending { it.day }
         if (days.isNotEmpty()) item {
@@ -154,6 +158,64 @@ private fun WeekChart(week: List<LocalDate>, byDay: Map<String, DayTotal>, norm:
         "Пунктир: ваша норма ($norm ккал). Тренировки уже вычтены.",
         fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp),
     )
+}
+
+/** Weight now and how it moved over a week and a month, with the last two months as a line. */
+@Composable
+private fun WeightCard(weights: List<Weight>, today: LocalDate) {
+    val sorted = weights.sortedBy { it.day }
+    val now = sorted.last()
+    // the weighing closest to N days ago, but not older than twice that
+    fun change(days: Long): Double? {
+        val target = today.minusDays(days)
+        val past = sorted.lastOrNull { !LocalDate.parse(it.day).isAfter(target) && it !== now }
+            ?.takeIf { !LocalDate.parse(it.day).isBefore(target.minusDays(days)) } ?: return null
+        return now.kg - past.kg
+    }
+    Card {
+        Text("Вес", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth()) {
+            Figure(String.format(ru, "%.1f", now.kg), "кг сейчас", MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
+            listOf(7L to "за неделю", 30L to "за месяц").forEach { (d, label) ->
+                val c = change(d)
+                Figure(
+                    c?.let { kgSigned(it) } ?: "—", "кг\n$label",
+                    when { c == null -> MaterialTheme.colorScheme.onSurfaceVariant; c <= 0 -> Good; else -> Bad },
+                    Modifier.weight(1f),
+                )
+            }
+        }
+        val recent = sorted.filter { !LocalDate.parse(it.day).isBefore(today.minusDays(60)) }
+        if (recent.size >= 2) {
+            Spacer(Modifier.height(16.dp))
+            val color = MaterialTheme.colorScheme.primary
+            Canvas(Modifier.fillMaxWidth().height(80.dp)) {
+                val lo = recent.minOf { it.kg } - 0.5
+                val hi = recent.maxOf { it.kg } + 0.5
+                val start = LocalDate.parse(recent.first().day).toEpochDay()
+                val span = (LocalDate.parse(recent.last().day).toEpochDay() - start).coerceAtLeast(1)
+                val pts = recent.map {
+                    Offset(
+                        ((LocalDate.parse(it.day).toEpochDay() - start).toFloat() / span) * size.width,
+                        ((hi - it.kg) / (hi - lo)).toFloat() * size.height,
+                    )
+                }
+                pts.zipWithNext { a, b -> drawLine(color, a, b, strokeWidth = 5f) }
+                pts.forEach { drawCircle(color, 6f, it) }
+            }
+        } else {
+            Text(
+                "Записывайте вес в «Профиле» раз в несколько дней, и здесь появится график.",
+                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+    }
+}
+
+private fun kgSigned(v: Double): String {
+    val s = String.format(ru, "%.1f", kotlin.math.abs(v))
+    return if (v < -0.05) "−$s" else if (v > 0.05) "+$s" else "0"
 }
 
 @Composable

@@ -248,6 +248,11 @@ function askPc_(pc, text, image) {
     ok: true, title: a.title ? String(a.title).slice(0, 80) : null, kcal: kcal,
     protein: num_(a.protein), fat: num_(a.fat), carbs: num_(a.carbs),
     question: q && opts.length ? q : null, options: q && opts.length ? opts : [],
+    // what the sum is made of, so the user can see a wrong guess at once
+    items: Array.isArray(a.items) ? a.items.slice(0, 12).map(function (it) {
+      var g = Math.round(Number(it.grams) || 0);
+      return { name: String(it.name || '').slice(0, 60), grams: g, kcal: Math.round(g * (Number(it.kcal100) || 0) / 100) };
+    }) : [],
   };
 }
 

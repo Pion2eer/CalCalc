@@ -79,7 +79,8 @@ class ScreenshotTest {
     private fun today(
         list: List<Entry>, s: DaySummary, update: UpdateState = UpdateState.Idle, input: String = "",
         day: LocalDate = today, blocker: String? = null, quick: List<QuickItem> = emptyList(),
-    ) = TodayContent(day, today, list, s, update, blocker, {}, {}, {}, { _, _ -> }, {}, initialInput = input, quick = quick)
+        suggestions: List<QuickItem> = emptyList(),
+    ) = TodayContent(day, today, list, s, update, blocker, {}, {}, {}, { _, _ -> }, {}, initialInput = input, quick = quick, suggestions = suggestions)
 
     @Test fun today_empty() = shot("01_today_empty") { today(emptyList(), DaySummary(2100, 0, 0, 0)) }
 
@@ -105,6 +106,13 @@ class ScreenshotTest {
             DayTotal(d.toString(), eaten = listOf(1850, 2300, 1600, 2050, 0, 1950, 2400)[i % 7], burned = listOf(0, 400, 0, 250, 0, 0, 600)[i % 7])
         }.filter { it.eaten > 0 }
         DiaryContent(totals, 2100, today)
+    }
+
+    @Test fun diary_weight() = shot("07b_diary_weight") {
+        val totals = (0 until 7).map { DayTotal(today.minusDays(it.toLong()).toString(), 1900 + it * 50, 0) }
+        val weights = listOf(40 to 84.6, 31 to 84.1, 21 to 83.7, 14 to 83.5, 8 to 83.0, 3 to 82.8, 0 to 82.5)
+            .map { (d, kg) -> ltd.pion.calcalc.data.Weight(today.minusDays(d.toLong()).toString(), kg) }
+        DiaryContent(totals, 2100, today, weights = weights)
     }
 
     @Test fun diary_empty() = shot("08_diary_empty") { DiaryContent(emptyList(), 2100, today) }
@@ -136,4 +144,10 @@ class ScreenshotTest {
         ))
     }
 
+    @Test fun today_suggestions() = shot("14_today_suggestions") {
+        today(entries, summary, input = "гре", suggestions = listOf(
+            QuickItem(Template("Гречка с курицей, 300 г", "гречка с курицей", EntryType.FOOD, 450, 35.0, 10.0, 50.0), false),
+            QuickItem(Template("Гречка 200 г", "гречка 200 г", EntryType.FOOD, 220, 8.0, 2.0, 40.0), true),
+        ))
+    }
 }

@@ -136,6 +136,8 @@ object Ai {
         val carbs: Double?,
         val question: String?,
         val options: List<String>,
+        /** The products the AI saw, as JSON [{name, grams, kcal}], kept with the entry as is. */
+        val items: String? = null,
     )
 
     suspend fun parse(url: String, token: String, text: String, weightKg: Double, image: String? = null): Answer {
@@ -155,6 +157,7 @@ object Ai {
             protein = d("protein"), fat = d("fat"), carbs = d("carbs"),
             question = s("question"),
             options = if (opts == null) emptyList() else (0 until opts.length()).map { opts.getString(it) },
+            items = j.optJSONArray("items")?.takeIf { it.length() > 0 }?.toString(),
         )
     }
 }

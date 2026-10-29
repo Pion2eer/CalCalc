@@ -17,6 +17,17 @@ PY
 )
   [ -n "$b" ] && adb shell input tap $b
 }
+swipe_left_text() {  # drag the row that shows $1 from right to left
+  tap_text_xy=$(adb shell uiautomator dump /sdcard/ui.xml >/dev/null; adb pull /sdcard/ui.xml ui.xml >/dev/null; python3 - "$1" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+for n in ET.parse('ui.xml').iter('node'):
+    if sys.argv[1] in (n.get('text') or ''):
+        x1, y1, x2, y2 = map(int, re.findall(r'\d+', n.get('bounds')))
+        print((y1 + y2) // 2); break
+PY
+)
+  [ -n "$tap_text_xy" ] && adb shell input swipe 1000 $tap_text_xy 150 $tap_text_xy 400
+}
 shot() { adb exec-out screencap -p > $out/$1.png; }
 
 adb install -r CalCalc-debug.apk
@@ -60,6 +71,11 @@ adb shell input swipe 200 1000 900 1000 250; sleep 2
 shot d4d_swiped_to_yesterday
 adb shell input swipe 900 1000 200 1000 250; sleep 2
 shot d4e_swiped_back_today
+# swipe an entry away, the snackbar offers to bring it back
+swipe_left_text "grechka"; sleep 1
+shot d4f_swipe_deleted
+tap_text "Отменить"; sleep 2
+shot d4g_restored
 tap_text "Дневник"; sleep 2
 shot d5_diary
 tap_text "Профиль"; sleep 2
