@@ -63,6 +63,7 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
     val steps by vm.steps.collectAsState()
     val stepCount by vm.stepCount.collectAsState()
     val sync by vm.syncStatus.collectAsState()
+    val theme by vm.theme.collectAsState()
     val stepsLauncher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) {
         vm.refreshSteps()
     }
@@ -81,6 +82,7 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
         onAiUrl = { vm.prefs.aiUrl = it }, onAutoDownload = { vm.prefs.autoDownloadOnWifi = it },
         onCheckUpdate = { vm.checkUpdate() }, onUpdate = vm::downloadAndInstall, modifier = modifier,
         steps = steps, stepCount = stepCount, sync = sync,
+        theme = theme, onTheme = { vm.prefs.theme = it },
         onSteps = {
             if (steps == StepsState.NEEDS_INSTALL) ctx.startActivity(
                 Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${Steps.PROVIDER}&url=healthconnect%3A%2F%2Fonboarding"))
@@ -114,6 +116,8 @@ fun ProfileContent(
     stepCount: Long? = null,
     onSteps: () -> Unit = {},
     sync: SyncStatus = SyncStatus(false, null, false),
+    theme: String = "dark",
+    onTheme: (String) -> Unit = {},
 ) {
     var male by remember(p0) { mutableStateOf(p0.male) }
     var year by remember(p0) { mutableStateOf(p0.birthYear.toString()) }
@@ -212,6 +216,14 @@ fun ProfileContent(
                 )
                 Button(onSteps, Modifier.fillMaxWidth().height(48.dp)) {
                     Text(if (steps == StepsState.NEEDS_INSTALL) "Установить Health Connect" else "Подключить шаги")
+                }
+            }
+        }
+
+        Section("Оформление") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("dark" to "Тёмная", "light" to "Светлая", "system" to "Как в системе").forEach { (k, label) ->
+                    FilterChip(theme == k, { onTheme(k) }, { Text(label) })
                 }
             }
         }

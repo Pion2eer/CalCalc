@@ -62,11 +62,11 @@ class ScreenshotTest {
     private val summary = DaySummary(norm = 2100, eaten = 910, burned = 400, pending = 2)
     private val release = Release(5, "0.1.5", "", "", "Новый экран «Сегодня»")
 
-    private fun shot(name: String, content: @Composable () -> Unit) {
+    private fun shot(name: String, dark: Boolean = true, content: @Composable () -> Unit) {
         // spinners never stop, so time is moved by hand instead of waiting for the screen to settle
         compose.mainClock.autoAdvance = false
         compose.setContent {
-            CalCalcTheme {
+            CalCalcTheme(dark) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { content() }
             }
         }
@@ -150,4 +150,16 @@ class ScreenshotTest {
             QuickItem(Template("Гречка 200 г", "гречка 200 г", EntryType.FOOD, 220, 8.0, 2.0, 40.0), true),
         ))
     }
+
+    @Test fun light_today() = shot("15_light_today", dark = false) { today(entries, summary, quick = listOf(
+        QuickItem(Template("Кофе с молоком", "кофе с молоком", EntryType.FOOD, 78, 3.0, 3.0, 5.0), true),
+    )) }
+
+    @Test fun light_diary() = shot("16_light_diary", dark = false) {
+        val totals = (0 until 7).map { DayTotal(today.minusDays(it.toLong()).toString(), listOf(1850, 2300, 1600, 2050, 1700, 1950, 2400)[it], 0) }
+        val weights = listOf(20 to 84.0, 10 to 83.4, 0 to 82.5).map { (d, kg) -> ltd.pion.calcalc.data.Weight(today.minusDays(d.toLong()).toString(), kg) }
+        DiaryContent(totals, 2100, today, weights = weights)
+    }
+
+    @Test fun light_profile() = shot("17_light_profile", dark = false) { profile("pion2er@gmail.com", UpdateState.UpToDate) }
 }

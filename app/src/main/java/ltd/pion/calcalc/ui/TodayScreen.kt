@@ -52,6 +52,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -122,10 +123,10 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val dayFmt = DateTimeFormatter.ofPattern("d MMMM, EEEE", Locale("ru"))
-private val Over = Color(0xFFEF5350)
-private val ProteinColor = Color(0xFF64B5F6)
-private val FatColor = Color(0xFFF06292)
-private val CarbsColor = Color(0xFFFFD54F)
+private val Over: Color @Composable @ReadOnlyComposable get() = Danger
+private val ProteinColor: Color @Composable @ReadOnlyComposable get() = Color(if (LocalDark.current) 0xFF64B5F6 else 0xFF1E88E5)
+private val FatColor: Color @Composable @ReadOnlyComposable get() = Color(if (LocalDark.current) 0xFFF06292 else 0xFFD81B60)
+private val CarbsColor: Color @Composable @ReadOnlyComposable get() = Color(if (LocalDark.current) 0xFFFFD54F else 0xFFE0A000)
 val QuickAdds = listOf("Падел 1 час", "Ходьба 30 мин", "Зал 1 час", "+100 ккал")
 
 @Composable
@@ -382,13 +383,14 @@ private fun Ring(s: DaySummary) {
     val frac = (s.eaten.toFloat() / budget).coerceIn(0f, 1f)
     val over = s.left < 0
     val track = MaterialTheme.colorScheme.background
+    val arc = if (over) Over else Accent
     Box(Modifier.size(140.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val w = 12.dp.toPx()
             val box = Size(size.width - w, size.height - w)
             val tl = Offset(w / 2, w / 2)
             drawArc(track, -90f, 360f, false, tl, box, style = Stroke(w))
-            if (frac > 0f) drawArc(if (over) Over else Accent, -90f, 360f * frac, false, tl, box, style = Stroke(w, cap = StrokeCap.Round))
+            if (frac > 0f) drawArc(arc, -90f, 360f * frac, false, tl, box, style = Stroke(w, cap = StrokeCap.Round))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("${kotlin.math.abs(s.left)}", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = if (over) Over else MaterialTheme.colorScheme.onSurface)
@@ -636,7 +638,7 @@ private fun InputBar(
                         ) else onSend()
                     },
                     Modifier.size(52.dp), enabled = mic || input.isNotBlank(),
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = Accent, contentColor = Color(0xFF00210F)),
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = Accent, contentColor = MaterialTheme.colorScheme.onPrimary),
                 ) {
                     if (mic) Icon(Icons.Filled.Mic, "Сказать голосом") else Icon(Icons.AutoMirrored.Filled.Send, "Добавить")
                 }

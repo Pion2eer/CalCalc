@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -41,8 +42,8 @@ import java.util.Locale
 
 private val ru = Locale("ru")
 private val longFmt = DateTimeFormatter.ofPattern("d MMMM, EEEE", ru)
-private val Good = Color(0xFF3DDC84)
-private val Bad = Color(0xFFEF5350)
+private val Good: Color @Composable @ReadOnlyComposable get() = Accent
+private val Bad: Color @Composable @ReadOnlyComposable get() = Danger
 
 @Composable
 fun DiaryScreen(vm: AppViewModel, modifier: Modifier) {
@@ -129,6 +130,8 @@ private fun WeekChart(week: List<LocalDate>, byDay: Map<String, DayTotal>, norm:
     val maxV = (values.maxOrNull() ?: 0).coerceAtLeast(norm) * 1.15f
     val track = MaterialTheme.colorScheme.background
     val line = MaterialTheme.colorScheme.onSurfaceVariant
+    val good = Good
+    val bad = Bad
     Canvas(Modifier.fillMaxWidth().height(140.dp)) {
         val step = size.width / week.size
         val bw = step * 0.56f
@@ -138,7 +141,7 @@ private fun WeekChart(week: List<LocalDate>, byDay: Map<String, DayTotal>, norm:
             drawRoundRect(track, Offset(x, 0f), Size(bw, size.height), r)
             if (v > 0) {
                 val h = v / maxV * size.height
-                drawRoundRect(if (v <= norm) Good else Bad, Offset(x, size.height - h), Size(bw, h), r)
+                drawRoundRect(if (v <= norm) good else bad, Offset(x, size.height - h), Size(bw, h), r)
             }
         }
         val y = size.height - norm / maxV * size.height

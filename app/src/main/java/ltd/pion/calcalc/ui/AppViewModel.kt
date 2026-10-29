@@ -64,6 +64,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val weights: StateFlow<List<Weight>> = db.weights().all()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val theme: StateFlow<String> = prefs.changes().map { prefs.theme }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, prefs.theme)
+
     val profile: StateFlow<Profile> = prefs.changes().map { prefs.profile }
         .stateIn(viewModelScope, SharingStarted.Eagerly, prefs.profile)
 
