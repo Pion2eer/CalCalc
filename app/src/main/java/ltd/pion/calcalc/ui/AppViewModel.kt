@@ -26,6 +26,7 @@ import ltd.pion.calcalc.domain.InputParser
 import ltd.pion.calcalc.domain.Norm
 import ltd.pion.calcalc.domain.Parsed
 import ltd.pion.calcalc.sync.GoogleAuth
+import ltd.pion.calcalc.sync.Photos
 import ltd.pion.calcalc.sync.Sheets
 import ltd.pion.calcalc.sync.Steps
 import ltd.pion.calcalc.sync.StepsState
@@ -149,10 +150,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** A photo of the food from the camera: shrunk and kept with the entry, the AI counts it from the picture. */
+    fun addPhoto(uri: android.net.Uri, text: String) = viewModelScope.launch {
+        val id = java.util.UUID.randomUUID().toString()
+        val path = Photos.save(getApplication(), uri, id) ?: return@launch
+        val words = text.trim()
+        db.entries().upsert(
+            Entry(
+                id = id, type = EntryType.FOOD, rawText = words, title = words.ifBlank { "Фото еды" }, kcal = null,
+                status = EntryStatus.QUEUED, day = _day.value.toString(), photo = path,
+            )
+        )
+        SyncWorker.enqueue(getApplication())
+    }
+
     /** The user rewrote what they ate or did: the entry is read again from the new text, food goes back to the AI. */
     fun rewrite(entry: Entry, text: String) {
         if (text.isBlank()) return
-        val fresh = parseEntry(text.trim(), entry.day).copy(id = entry.id, createdAt = entry.createdAt)
+        val parsed = parseEntry(text.trim(), entry.day).copy(id = entry.id, createdAt = entry.createdAt)
+        // the photo stays with food: the new words only add to what the picture shows
+        val fresh = if (parsed.type == EntryType.FOOD) parsed.copy(photo = entry.photo) else parsed
         viewModelScope.launch {
             db.entries().upsert(fresh)
             SyncWorker.enqueue(getApplication())
@@ -186,7 +203,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         SyncWorker.enqueue(getApplication())
     }
 
-    fun delete(entry: Entry) = viewModelScope.launch { db.entries().delete(entry.id) }
+    fun delete(entry: Entry) = viewModelScope.launch {
+        db.entries().delete(entry.id)
+        entry.photo?.let { java.io.File(it).delete() }
+    }
 
     fun saveProfile(p: Profile, weightKg: Double?) = viewModelScope.launch {
         prefs.profile = p
