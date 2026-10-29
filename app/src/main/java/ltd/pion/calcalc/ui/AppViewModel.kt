@@ -16,6 +16,8 @@ import kotlinx.coroutines.launch
 import ltd.pion.calcalc.data.AppDb
 import ltd.pion.calcalc.data.DayTotal
 import ltd.pion.calcalc.data.Entry
+import ltd.pion.calcalc.data.Favorite
+import ltd.pion.calcalc.data.Template
 import ltd.pion.calcalc.data.EntryStatus
 import ltd.pion.calcalc.data.EntryType
 import ltd.pion.calcalc.data.Prefs
@@ -34,6 +36,8 @@ import ltd.pion.calcalc.sync.SyncWorker
 import ltd.pion.calcalc.update.UpdateState
 import ltd.pion.calcalc.update.Updater
 import java.time.LocalDate
+
+data class QuickItem(val template: Template, val favorite: Boolean)
 
 data class SyncStatus(val running: Boolean, val text: String?, val warn: Boolean)
 
@@ -150,6 +154,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             db.entries().upsert(entry)
             SyncWorker.enqueue(getApplication())
         }
+    }
+
+    val favorites: StateFlow<List<Favorite>> = db.favorites().all()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Quick buttons: starred food first, then what was eaten often in the last two months. */
+    val quick: StateFlow<List<QuickItem>> = combine(
+        favorites, db.entries().frequent(System.currentTimeMillis() - 60L * 24 * 3600 * 1000),
+    ) { favs, often ->
+        val starred = favs.map { QuickItem(Template(it.title, it.rawText, it.type, it.kcal, it.protein, it.fat, it.carbs), true) }
+        val names = favs.map { it.title }.toSet()
+        (starred + often.filter { it.title !in names }.map { QuickItem(it, false) }).take(12)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun toggleFavorite(e: Entry) = viewModelScope.launch {
+        if (favorites.value.any { it.title == e.title }) db.favorites().delete(e.title)
+        else e.kcal?.takeIf { it > 0 }?.let {
+            db.favorites().upsert(Favorite(e.title, e.rawText.ifBlank { e.title }, e.type, it, e.protein, e.fat, e.carbs))
+        }
+    }
+
+    /** One tap on a quick button: the same food again, already counted. */
+    fun repeat(t: Template) = viewModelScope.launch {
+        db.entries().upsert(
+            Entry(
+                type = t.type, rawText = t.rawText, title = t.title, kcal = t.kcal,
+                protein = t.protein, fat = t.fat, carbs = t.carbs, status = EntryStatus.DONE, day = _day.value.toString(),
+            )
+        )
+        SyncWorker.enqueue(getApplication())
     }
 
     /** A photo of the food from the camera: shrunk and kept with the entry, the AI counts it from the picture. */

@@ -108,6 +108,14 @@ interface EntryDao {
     @Query("SELECT COUNT(*) FROM entries WHERE type = 'food' AND status IN ('queued', 'processing')")
     fun waitingCount(): Flow<Int>
 
+    /** Food eaten at least twice since [since], most often first: the quick buttons offer it again. */
+    @Query(
+        """SELECT title, rawText, type, kcal, protein, fat, carbs FROM entries
+           WHERE type IN ('food', 'manual') AND status = 'done' AND kcal > 0 AND createdAt > :since
+           GROUP BY title HAVING COUNT(*) >= 2 ORDER BY COUNT(*) DESC, MAX(createdAt) DESC LIMIT 8"""
+    )
+    fun frequent(since: Long): Flow<List<Template>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: Entry)
 
@@ -141,23 +149,69 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
+/** Food the user starred: it stays first among the quick buttons. */
+@Entity(tableName = "favorites")
+data class Favorite(
+    @PrimaryKey val title: String,
+    val rawText: String,
+    val type: String,
+    val kcal: Int,
+    val protein: Double? = null,
+    val fat: Double? = null,
+    val carbs: Double? = null,
+    val addedAt: Long = System.currentTimeMillis(),
+)
+
+/** A ready entry for a quick button: added again in one tap with the same calories, without the AI. */
+data class Template(
+    val title: String,
+    val rawText: String,
+    val type: String,
+    val kcal: Int,
+    val protein: Double?,
+    val fat: Double?,
+    val carbs: Double?,
+)
+
+@Dao
+interface FavoriteDao {
+    @Query("SELECT * FROM favorites ORDER BY addedAt")
+    fun all(): Flow<List<Favorite>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(f: Favorite)
+
+    @Query("DELETE FROM favorites WHERE title = :title")
+    suspend fun delete(title: String)
+}
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `favorites` (`title` TEXT NOT NULL, `rawText` TEXT NOT NULL, `type` TEXT NOT NULL, " +
+                "`kcal` INTEGER NOT NULL, `protein` REAL, `fat` REAL, `carbs` REAL, `addedAt` INTEGER NOT NULL, PRIMARY KEY(`title`))"
+        )
+    }
+}
+
 val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE entries ADD COLUMN photo TEXT")
     }
 }
 
-@Database(entities = [Entry::class, Weight::class], version = 3, exportSchema = false)
+@Database(entities = [Entry::class, Weight::class, Favorite::class], version = 4, exportSchema = false)
 abstract class AppDb : RoomDatabase() {
     abstract fun entries(): EntryDao
     abstract fun weights(): WeightDao
+    abstract fun favorites(): FavoriteDao
 
     companion object {
         @Volatile private var instance: AppDb? = null
 
         fun get(context: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "calcalc.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build().also { instance = it }
         }
     }

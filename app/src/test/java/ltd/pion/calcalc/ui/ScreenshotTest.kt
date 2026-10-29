@@ -15,6 +15,7 @@ import ltd.pion.calcalc.data.Entry
 import ltd.pion.calcalc.data.EntryStatus
 import ltd.pion.calcalc.data.EntryType
 import ltd.pion.calcalc.data.Profile
+import ltd.pion.calcalc.data.Template
 import ltd.pion.calcalc.update.Release
 import ltd.pion.calcalc.update.UpdateState
 import org.junit.Rule
@@ -77,8 +78,8 @@ class ScreenshotTest {
     @Composable
     private fun today(
         list: List<Entry>, s: DaySummary, update: UpdateState = UpdateState.Idle, input: String = "",
-        day: LocalDate = today, blocker: String? = null,
-    ) = TodayContent(day, today, list, s, update, blocker, {}, {}, {}, { _, _ -> }, {}, initialInput = input)
+        day: LocalDate = today, blocker: String? = null, quick: List<QuickItem> = emptyList(),
+    ) = TodayContent(day, today, list, s, update, blocker, {}, {}, {}, { _, _ -> }, {}, initialInput = input, quick = quick)
 
     @Test fun today_empty() = shot("01_today_empty") { today(emptyList(), DaySummary(2100, 0, 0, 0)) }
 
@@ -126,5 +127,17 @@ class ScreenshotTest {
 
     @Test fun profile_sync_problem() = shot("12_profile_sync_problem") {
         profile("pion2er@gmail.com", UpdateState.UpToDate, SyncStatus(false, "Компьютер с ИИ недоступен (ждут: 1)", true))
+    }
+
+    @Test fun today_quick() = shot("13_today_quick") {
+        today(entries, summary, quick = listOf(
+            QuickItem(Template("Кофе с молоком", "кофе с молоком", EntryType.FOOD, 78, 3.0, 3.0, 5.0), true),
+            QuickItem(Template("Гречка 200 г", "гречка 200 г", EntryType.FOOD, 220, 8.0, 2.0, 40.0), false),
+        ))
+    }
+
+    @Test fun entry_dialog_favorite() = shot("14_entry_dialog_favorite") {
+        today(entries, summary)
+        EntryDialog(entries.first { (it.kcal ?: 0) > 0 }, {}, {}, {}, {}, favorite = true)
     }
 }

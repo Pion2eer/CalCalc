@@ -58,6 +58,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
@@ -111,6 +113,8 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
     val update by vm.update.collectAsState()
     val blocker by vm.aiBlocker.collectAsState()
     var editing by remember { mutableStateOf<Entry?>(null) }
+    val favs by vm.favorites.collectAsState()
+    val quick by vm.quick.collectAsState()
     // steps keep coming in during the day: read them again each time the screen is opened
     LifecycleResumeEffect(Unit) {
         vm.refreshSteps()
@@ -122,6 +126,7 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
         onShiftDay = vm::shiftDay, onAdd = vm::add, onOpen = { editing = it },
         onAnswer = { e, o -> vm.answer(e, o) }, onUpdate = vm::downloadAndInstall, modifier = modifier,
         onAddPhoto = { uri, text -> vm.addPhoto(uri, text) },
+        quick = quick, onQuickItem = { vm.repeat(it.template) },
         pageData = { d ->
             remember(d) { vm.dayData(d) }.collectAsState(emptyList<Entry>() to s.copy(eaten = 0, burned = 0, pending = 0)).value
         },
@@ -133,6 +138,7 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
             onSave = { vm.setKcal(e, it); editing = null },
             onRewrite = { vm.rewrite(e, it); editing = null },
             onDelete = { vm.delete(e); editing = null },
+            favorite = favs.any { it.title == e.title }, onFavorite = { vm.toggleFavorite(e) },
         )
     }
 }
@@ -154,6 +160,8 @@ fun TodayContent(
     modifier: Modifier = Modifier,
     initialInput: String = "",
     onAddPhoto: (android.net.Uri, String) -> Unit = { _, _ -> },
+    quick: List<QuickItem> = emptyList(),
+    onQuickItem: (QuickItem) -> Unit = {},
     /** Entries and totals of any day, for the pages around the shown one; without it only the shown day has data. */
     pageData: (@Composable (LocalDate) -> Pair<List<Entry>, DaySummary>)? = null,
 ) {
@@ -183,7 +191,7 @@ fun TodayContent(
             DayPage(d, today, list, sum, aiBlocker, onShiftDay, onOpen, onAnswer)
         }
 
-        InputBar(input, { input = it }, send, onQuick = onAdd, onPhoto = { uri -> onAddPhoto(uri, input); input = "" })
+        InputBar(input, { input = it }, send, onQuick = onAdd, onPhoto = { uri -> onAddPhoto(uri, input); input = "" }, quick = quick, onQuickItem = onQuickItem)
     }
 }
 
@@ -445,12 +453,27 @@ private fun EmptyHint() {
 }
 
 @Composable
-private fun InputBar(input: String, onInput: (String) -> Unit, onSend: () -> Unit, onQuick: (String) -> Unit, onPhoto: (android.net.Uri) -> Unit) {
+private fun InputBar(
+    input: String, onInput: (String) -> Unit, onSend: () -> Unit, onQuick: (String) -> Unit, onPhoto: (android.net.Uri) -> Unit,
+    quick: List<QuickItem> = emptyList(), onQuickItem: (QuickItem) -> Unit = {},
+) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
             Spacer(Modifier.height(8.dp))
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // starred and frequent food first: one tap adds it again with the same calories
+                items(quick, key = { "t" + it.template.title }) { q ->
+                    Surface(
+                        onClick = { onQuickItem(q) }, shape = RoundedCornerShape(50),
+                        color = Accent.copy(alpha = 0.15f), contentColor = MaterialTheme.colorScheme.onSurface,
+                    ) {
+                        Text(
+                            (if (q.favorite) "★ " else "") + q.template.title + " · " + q.template.kcal,
+                            Modifier.padding(horizontal = 14.dp, vertical = 8.dp), fontSize = 14.sp, maxLines = 1,
+                        )
+                    }
+                }
                 items(QuickAdds) { q ->
                     Surface(
                         onClick = { onQuick(q) }, shape = RoundedCornerShape(50),
@@ -554,6 +577,7 @@ private fun parseOptions(json: String?): List<String> = try {
 @Composable
 fun EntryDialog(
     e: Entry, onDismiss: () -> Unit, onSave: (Int) -> Unit, onRewrite: (String) -> Unit, onDelete: () -> Unit,
+    favorite: Boolean = false, onFavorite: () -> Unit = {},
 ) {
     val burn = (e.kcal ?: 0) < 0 || e.type == EntryType.ACTIVITY
     var record by remember { mutableStateOf(e.rawText) }
@@ -562,7 +586,18 @@ fun EntryDialog(
     val rewritten = record.trim() != e.rawText.trim()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(e.title) },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(e.title, Modifier.weight(1f))
+                // counted food can be starred, to add it again from the quick buttons
+                if ((e.kcal ?: 0) > 0) IconButton(onFavorite) {
+                    Icon(
+                        if (favorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                        if (favorite) "Убрать из избранного" else "В избранное", tint = if (favorite) Accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
         text = {
             Column {
                 OutlinedTextField(
