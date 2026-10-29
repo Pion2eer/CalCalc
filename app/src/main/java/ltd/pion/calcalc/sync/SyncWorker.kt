@@ -49,7 +49,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             db.entries().requeueNullQuestions()
             for (e in db.entries().forAi()) {
                 val a = try {
-                    Ai.parse(prefs.aiUrl, token, aiText(e), weight)
+                    Ai.parse(prefs.aiUrl, token, aiText(e), weight, e.photo?.let { Photos.base64(it) })
                 } catch (ex: Exception) {
                     report(prefs, token, "parse failed: $ex")
                     prefs.aiProblem = "Нет связи с ИИ, записи посчитаются позже"

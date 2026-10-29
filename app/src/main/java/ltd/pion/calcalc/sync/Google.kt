@@ -138,8 +138,9 @@ object Ai {
         val options: List<String>,
     )
 
-    suspend fun parse(url: String, token: String, text: String, weightKg: Double): Answer {
+    suspend fun parse(url: String, token: String, text: String, weightKg: Double, image: String? = null): Answer {
         val body = JSONObject().put("action", "parse").put("accessToken", token).put("text", text).put("weightKg", weightKg)
+        if (image != null) body.put("image", image)
         val j = JSONObject(Script.post(url, body.toString()))
         fun d(k: String) = if (j.has(k) && !j.isNull(k)) j.getDouble(k) else null
         // optString turns a JSON null into the text "null", which once showed up as the AI's question

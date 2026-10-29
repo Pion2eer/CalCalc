@@ -56,6 +56,8 @@ data class Entry(
     val question: String? = null,
     val options: String? = null,
     val answer: String? = null,
+    /** A photo of the food, a JPEG in the app's files: it goes to the AI with the text. */
+    val photo: String? = null,
 )
 
 @Entity(tableName = "weights")
@@ -136,7 +138,13 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
-@Database(entities = [Entry::class, Weight::class], version = 2, exportSchema = false)
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE entries ADD COLUMN photo TEXT")
+    }
+}
+
+@Database(entities = [Entry::class, Weight::class], version = 3, exportSchema = false)
 abstract class AppDb : RoomDatabase() {
     abstract fun entries(): EntryDao
     abstract fun weights(): WeightDao
@@ -146,7 +154,7 @@ abstract class AppDb : RoomDatabase() {
 
         fun get(context: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "calcalc.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build().also { instance = it }
         }
     }

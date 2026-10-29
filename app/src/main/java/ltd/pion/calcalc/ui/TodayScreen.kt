@@ -58,6 +58,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Image
+import ltd.pion.calcalc.sync.Photos
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.core.content.FileProvider
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.filled.Mic
 import androidx.activity.result.contract.ActivityResultContracts
@@ -115,6 +121,7 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
         day = day, today = LocalDate.now(), entries = entries, s = s, update = update, aiBlocker = blocker,
         onShiftDay = vm::shiftDay, onAdd = vm::add, onOpen = { editing = it },
         onAnswer = { e, o -> vm.answer(e, o) }, onUpdate = vm::downloadAndInstall, modifier = modifier,
+        onAddPhoto = { uri, text -> vm.addPhoto(uri, text) },
         pageData = { d ->
             remember(d) { vm.dayData(d) }.collectAsState(emptyList<Entry>() to s.copy(eaten = 0, burned = 0, pending = 0)).value
         },
@@ -146,6 +153,7 @@ fun TodayContent(
     onUpdate: () -> Unit,
     modifier: Modifier = Modifier,
     initialInput: String = "",
+    onAddPhoto: (android.net.Uri, String) -> Unit = { _, _ -> },
     /** Entries and totals of any day, for the pages around the shown one; without it only the shown day has data. */
     pageData: (@Composable (LocalDate) -> Pair<List<Entry>, DaySummary>)? = null,
 ) {
@@ -175,7 +183,7 @@ fun TodayContent(
             DayPage(d, today, list, sum, aiBlocker, onShiftDay, onOpen, onAnswer)
         }
 
-        InputBar(input, { input = it }, send, onQuick = onAdd)
+        InputBar(input, { input = it }, send, onQuick = onAdd, onPhoto = { uri -> onAddPhoto(uri, input); input = "" })
     }
 }
 
@@ -346,7 +354,10 @@ private fun EntryRow(e: Entry, waiting: Boolean, onClick: () -> Unit) {
         Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 60.dp).padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
+        val thumb = e.photo?.let { path -> remember(path) { Photos.thumbnail(path, 120) } }
+        if (thumb != null) Image(
+            thumb.asImageBitmap(), null, Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop,
+        ) else Box(
             Modifier.size(36.dp).background((if (activity) Burn else Accent).copy(alpha = 0.15f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
@@ -434,7 +445,7 @@ private fun EmptyHint() {
 }
 
 @Composable
-private fun InputBar(input: String, onInput: (String) -> Unit, onSend: () -> Unit, onQuick: (String) -> Unit) {
+private fun InputBar(input: String, onInput: (String) -> Unit, onSend: () -> Unit, onQuick: (String) -> Unit, onPhoto: (android.net.Uri) -> Unit) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
             HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
@@ -449,7 +460,15 @@ private fun InputBar(input: String, onInput: (String) -> Unit, onSend: () -> Uni
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                // a photo of the plate: the camera app takes it, the words in the field (if any) go along as a hint
+                val camCtx = LocalContext.current
+                val shot = remember { Photos.cameraFile(camCtx) }
+                val shotUri = remember { runCatching { FileProvider.getUriForFile(camCtx, camCtx.packageName + ".files", shot) }.getOrNull() }
+                val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok && shotUri != null) onPhoto(shotUri) }
+                IconButton({ shotUri?.let { runCatching { camera.launch(it) } } }) {
+                    Icon(Icons.Filled.PhotoCamera, "Сфотографировать еду", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 TextField(
                     input, onInput, Modifier.weight(1f),
                     placeholder = { Text("Что съели или сделали?") },
