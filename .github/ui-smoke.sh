@@ -3,9 +3,26 @@
 # and take screenshots. The pictures land in shots-device/ and are published with the others.
 set -x
 out=shots-device; mkdir -p $out
+no_anr() {  # the slow emulator keeps showing «… isn't responding» over the app: answer «Wait» until it is gone
+  for i in 1 2 3 4 5; do
+    adb shell uiautomator dump /sdcard/ui.xml >/dev/null
+    adb pull /sdcard/ui.xml ui.xml >/dev/null
+    w=$(python3 - <<'PY'
+import re, xml.etree.ElementTree as ET
+nodes = list(ET.parse('ui.xml').iter('node'))
+if any("isn't responding" in (n.get('text') or '') for n in nodes):
+    for n in nodes:
+        if (n.get('text') or '') == 'Wait':
+            x1, y1, x2, y2 = map(int, re.findall(r'\d+', n.get('bounds')))
+            print((x1 + x2) // 2, (y1 + y2) // 2); break
+PY
+)
+    [ -z "$w" ] && return 0
+    adb shell input tap $w; sleep 2
+  done
+}
 tap_text() {  # tap the first element whose text or hint contains $1
-  adb shell uiautomator dump /sdcard/ui.xml >/dev/null
-  adb pull /sdcard/ui.xml ui.xml >/dev/null
+  no_anr
   b=$(python3 - "$1" <<'PY'
 import re, sys, xml.etree.ElementTree as ET
 t = sys.argv[1]
@@ -29,8 +46,7 @@ PY
   [ -n "$tap_text_xy" ] && adb shell input swipe 1000 $tap_text_xy 150 $tap_text_xy 400
 }
 tap_exact() {  # tap the element whose text is exactly $1
-  adb shell uiautomator dump /sdcard/ui.xml >/dev/null
-  adb pull /sdcard/ui.xml ui.xml >/dev/null
+  no_anr
   b=$(python3 - "$1" <<'PY'
 import re, sys, xml.etree.ElementTree as ET
 for n in ET.parse('ui.xml').iter('node'):
@@ -41,7 +57,7 @@ PY
 )
   [ -n "$b" ] && adb shell input tap $b
 }
-shot() { adb exec-out screencap -p > $out/$1.png; }
+shot() { no_anr; adb exec-out screencap -p > $out/$1.png; }
 
 adb install -r CalCalc-debug.apk
 adb shell pm grant ltd.pion.calcalc android.permission.POST_NOTIFICATIONS || true
@@ -63,7 +79,7 @@ shot d2d_camera_taken
 tap_text "Done" || tap_text "OK"; sleep 4
 shot d2e_photo_entry
 tap_text "Что съели"; sleep 3
-adb shell input text "grechka%s300%sg"; sleep 2
+no_anr; adb shell input text "grechka%s300%sg"; sleep 2
 shot d3_typing_keyboard
 adb shell input keyevent 66; sleep 3
 adb shell input keyevent 4; sleep 2
