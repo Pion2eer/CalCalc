@@ -58,11 +58,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import java.time.temporal.ChronoUnit
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -108,6 +109,9 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
         day = day, today = LocalDate.now(), entries = entries, s = s, update = update, aiBlocker = blocker,
         onShiftDay = vm::shiftDay, onAdd = vm::add, onOpen = { editing = it },
         onAnswer = { e, o -> vm.answer(e, o) }, onUpdate = vm::downloadAndInstall, modifier = modifier,
+        pageData = { d ->
+            remember(d) { vm.dayData(d) }.collectAsState(emptyList<Entry>() to s.copy(eaten = 0, burned = 0, pending = 0)).value
+        },
     )
 
     editing?.let { e ->
@@ -136,6 +140,8 @@ fun TodayContent(
     onUpdate: () -> Unit,
     modifier: Modifier = Modifier,
     initialInput: String = "",
+    /** Entries and totals of any day, for the pages around the shown one; without it only the shown day has data. */
+    pageData: (@Composable (LocalDate) -> Pair<List<Entry>, DaySummary>)? = null,
 ) {
     var input by rememberSaveable { mutableStateOf(initialInput) }
     val send = {
@@ -146,58 +152,66 @@ fun TodayContent(
     }
 
     Column(modifier.fillMaxSize()) {
-        // a sideways swipe moves between days: to the right goes back, to the left forward; the list follows the finger
-        var drag by remember { mutableFloatStateOf(0f) }
-        val limit = with(LocalDensity.current) { 80.dp.toPx() }
-        LazyColumn(
-            Modifier.weight(1f).fillMaxWidth()
-                .pointerInput(day) {
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            if (drag > limit) onShiftDay(-1)
-                            else if (drag < -limit && day.isBefore(today)) onShiftDay(1)
-                            drag = 0f
-                        },
-                        onDragCancel = { drag = 0f },
-                    ) { change, dx ->
-                        change.consume()
-                        drag += dx
-                    }
-                }
-                .graphicsLayer {
-                    // past today there is nothing, so the list only gives a little
-                    translationX = if (drag < 0 && !day.isBefore(today)) drag / 6 else drag / 2
-                    alpha = 1f - (kotlin.math.abs(drag) / (limit * 6)).coerceAtMost(0.4f)
-                },
-            contentPadding = PaddingValues(bottom = 12.dp)) {
-            item { UpdateBanner(update, onUpdate) }
-            item { DayHeader(day, today, onShiftDay) }
-            item { SummaryCard(s, entries, aiBlocker) }
+        UpdateBanner(update, onUpdate)
+        // days are pages: the next one slides in under the finger, older days lie to the left, today is the last page
+        val index = ChronoUnit.DAYS.between(day, today).toInt()
+        val pager = rememberPagerState(initialPage = index) { DaysBack }
+        val shownIndex by rememberUpdatedState(index)
+        val shift by rememberUpdatedState(onShiftDay)
+        LaunchedEffect(index) { if (pager.currentPage != index) pager.animateScrollToPage(index) }
+        LaunchedEffect(pager) {
+            snapshotFlow { pager.settledPage }.collect { if (it != shownIndex) shift((shownIndex - it).toLong()) }
+        }
+        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), reverseLayout = true, beyondViewportPageCount = 1, key = { it }) { page ->
+            val d = today.minusDays(page.toLong())
+            val (list, sum) = pageData?.invoke(d)
+                ?: if (d == day) entries to s else emptyList<Entry>() to s.copy(eaten = 0, burned = 0, pending = 0)
+            DayPage(d, today, list, sum, aiBlocker, onShiftDay, onOpen, onAnswer)
+        }
 
-            val ask = entries.filter { it.status == EntryStatus.NEEDS_ANSWER && it.question != null }
-            if (ask.isNotEmpty()) {
-                item { SectionTitle("ИИ уточняет", null) }
-                items(ask, key = { "q" + it.id }) { e -> QuestionCard(e, onAnswer = { onAnswer(e, it) }, onOpen = { onOpen(e) }) }
-            }
+        InputBar(input, { input = it }, send, onQuick = onAdd)
+    }
+}
 
-            if (entries.isEmpty()) {
-                item { EmptyHint() }
-            } else {
-                mealGroups(entries).forEach { (name, list) ->
-                    item(key = "h$name") { SectionTitle(name, if (list.all { it.kcal == null }) null else list.mapNotNull { it.kcal }.sum()) }
-                    item(key = "g$name") {
-                        Surface(
-                            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                            shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface,
-                        ) {
-                            Column { list.forEach { EntryRow(it, waiting = aiBlocker != null, onClick = { onOpen(it) }) } }
-                        }
+/** How far back the pages go: ten years of days. */
+private const val DaysBack = 3650
+
+@Composable
+private fun DayPage(
+    day: LocalDate,
+    today: LocalDate,
+    entries: List<Entry>,
+    s: DaySummary,
+    aiBlocker: String?,
+    onShiftDay: (Long) -> Unit,
+    onOpen: (Entry) -> Unit,
+    onAnswer: (Entry, String) -> Unit,
+) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 12.dp)) {
+        item { DayHeader(day, today, onShiftDay) }
+        item { SummaryCard(s, entries, aiBlocker) }
+
+        val ask = entries.filter { it.status == EntryStatus.NEEDS_ANSWER && it.question != null }
+        if (ask.isNotEmpty()) {
+            item { SectionTitle("ИИ уточняет", null) }
+            items(ask, key = { "q" + it.id }) { e -> QuestionCard(e, onAnswer = { onAnswer(e, it) }, onOpen = { onOpen(e) }) }
+        }
+
+        if (entries.isEmpty()) {
+            item { EmptyHint() }
+        } else {
+            mealGroups(entries).forEach { (name, list) ->
+                item(key = "h$name") { SectionTitle(name, if (list.all { it.kcal == null }) null else list.mapNotNull { it.kcal }.sum()) }
+                item(key = "g$name") {
+                    Surface(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface,
+                    ) {
+                        Column { list.forEach { EntryRow(it, waiting = aiBlocker != null, onClick = { onOpen(it) }) } }
                     }
                 }
             }
         }
-
-        InputBar(input, { input = it }, send, onQuick = onAdd)
     }
 }
 

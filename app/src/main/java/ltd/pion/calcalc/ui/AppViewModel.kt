@@ -66,14 +66,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val totals: StateFlow<List<DayTotal>> = db.entries().totals()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val summary: StateFlow<DaySummary> = combine(entries, profile, weight) { list, p, w ->
-        DaySummary(
-            norm = Norm.daily(p, w),
-            eaten = list.mapNotNull { it.kcal }.filter { it > 0 }.sum(),
-            burned = -list.mapNotNull { it.kcal }.filter { it < 0 }.sum(),
-            pending = list.count { it.kcal == null },
-        )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, DaySummary(2000, 0, 0, 0))
+    val summary: StateFlow<DaySummary> = combine(entries, profile, weight) { list, p, w -> summarize(list, p, w) }.stateIn(viewModelScope, SharingStarted.Eagerly, DaySummary(2000, 0, 0, 0))
+
+    /** One day's entries and totals, for the day pages next to the shown one. */
+    fun dayData(day: LocalDate) = combine(db.entries().forDay(day.toString()), profile, weight) { list, p, w ->
+        list to summarize(list, p, w)
+    }
+
+    private fun summarize(list: List<Entry>, p: Profile, w: Double) = DaySummary(
+        norm = Norm.daily(p, w),
+        eaten = list.mapNotNull { it.kcal }.filter { it > 0 }.sum(),
+        burned = -list.mapNotNull { it.kcal }.filter { it < 0 }.sum(),
+        pending = list.count { it.kcal == null },
+    )
 
     /** Shown instead of «ИИ считает» when food cannot be counted yet, with what to do about it. */
     val aiBlocker: StateFlow<String?> = prefs.changes().map {
