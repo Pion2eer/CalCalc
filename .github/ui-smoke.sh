@@ -85,4 +85,15 @@ shot d7_profile_steps
 tap_text "Подключить шаги"; sleep 4
 shot d8_health_connect_permission
 adb shell input keyevent 4; sleep 2
+# light theme: switch it in the profile and look at the screens, status bar included
+adb shell am start -W -n ltd.pion.calcalc/.ui.MainActivity; sleep 2
+tap_text "Профиль"; sleep 2
+adb shell input swipe 500 1800 500 300 300; sleep 1
+adb shell input swipe 500 1800 500 300 300; sleep 1
+tap_text "Светлая"; sleep 2
+shot d9_light_profile
+tap_text "Сегодня"; sleep 2
+shot d9b_light_today
+tap_text "Дневник"; sleep 2
+shot d9c_light_diary
 ls -la $out
