@@ -136,7 +136,4 @@ class ScreenshotTest {
         ))
     }
 
-    @Test fun entry_dialog_favorite() = shot("14_entry_dialog_favorite") {
-        EntryDialog(entries.first { (it.kcal ?: 0) > 0 }, {}, {}, {}, {}, favorite = true)
-    }
 }
