@@ -456,7 +456,7 @@ private fun SwipeRow(title: String, onDelete: () -> Unit, content: @Composable (
         return
     }
     SwipeToDismissBox(
-        state, Modifier.onSizeChanged { width = it.width }, enableDismissFromStartToEnd = false,
+        state, modifier = Modifier.onSizeChanged { width = it.width }, enableDismissFromStartToEnd = false,
         backgroundContent = {
             Box(Modifier.fillMaxSize().background(Over.copy(alpha = 0.85f)).padding(end = 20.dp), contentAlignment = Alignment.CenterEnd) {
                 Icon(Icons.Filled.Delete, "Удалить", tint = Color.White)
