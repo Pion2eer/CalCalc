@@ -70,6 +70,9 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.SwipeToDismissBox
 import kotlinx.coroutines.launch
@@ -158,11 +161,11 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
         quick = quick, onQuickItem = { q, factor -> vm.repeat(q.template, factor) },
         suggestions = suggestions, onQuery = vm::setQuery,
         onSwipeDelete = { e ->
-            vm.delete(e, keepPhoto = true)
+            vm.delete(e)
             scope.launch {
                 snack.currentSnackbarData?.dismiss()
-                val r = snack.showSnackbar("Удалено: ${e.title}", "Отменить", duration = SnackbarDuration.Short)
-                if (r == SnackbarResult.ActionPerformed) vm.restore(e) else e.photo?.let { java.io.File(it).delete() }
+                val r = snack.showSnackbar("Удалено: ${e.title}", "Отменить", duration = SnackbarDuration.Long)
+                if (r == SnackbarResult.ActionPerformed) vm.restore(e)
             }
         },
         onRepeatGroup = { name, list ->
@@ -294,7 +297,7 @@ private fun DayPage(
                     ) {
                         Column {
                             list.forEach { e ->
-                                key(e.id) { SwipeRow(onDelete = { onSwipeDelete(e) }) { EntryRow(e, waiting = aiBlocker != null, onClick = { onOpen(e) }) } }
+                                key(e.id) { SwipeRow(e.title, onDelete = { onSwipeDelete(e) }) { EntryRow(e, waiting = aiBlocker != null, onClick = { onOpen(e) }) } }
                             }
                         }
                     }
@@ -427,13 +430,33 @@ private fun SectionTitle(name: String, kcal: Int?, onRepeat: (() -> Unit)? = nul
 
 /** A row that goes away with a swipe to the left; the screen offers to undo it. */
 @Composable
-private fun SwipeRow(onDelete: () -> Unit, content: @Composable () -> Unit) {
-    val state = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
-        if (v == SwipeToDismissBoxValue.EndToStart) onDelete()
-        v == SwipeToDismissBoxValue.EndToStart
-    })
+private fun SwipeRow(title: String, onDelete: () -> Unit, content: @Composable () -> Unit) {
+    // a swipe only asks, the entry goes away after a tap on «Удалить»: scrolling can no longer delete anything
+    var asking by remember { mutableStateOf(false) }
+    var width by remember { mutableIntStateOf(0) }
+    lateinit var state: SwipeToDismissBoxState
+    state = rememberSwipeToDismissBoxState(
+        confirmValueChange = { v ->
+            // a quick flick while scrolling does not count, the finger has to drag the row halfway
+            val far = runCatching { kotlin.math.abs(state.requireOffset()) }.getOrDefault(0f) >= width * 0.5f
+            if (v == SwipeToDismissBoxValue.EndToStart && far) asking = true
+            false
+        },
+        positionalThreshold = { it * 0.5f },
+    )
+    if (asking) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 60.dp).background(Over.copy(alpha = 0.12f)).padding(start = 14.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Удалить «$title»?", Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
+            TextButton({ asking = false }) { Text("Нет") }
+            TextButton({ asking = false; onDelete() }) { Text("Удалить", color = Over, fontWeight = FontWeight.SemiBold) }
+        }
+        return
+    }
     SwipeToDismissBox(
-        state, enableDismissFromStartToEnd = false,
+        state, Modifier.onSizeChanged { width = it.width }, enableDismissFromStartToEnd = false,
         backgroundContent = {
             Box(Modifier.fillMaxSize().background(Over.copy(alpha = 0.85f)).padding(end = 20.dp), contentAlignment = Alignment.CenterEnd) {
                 Icon(Icons.Filled.Delete, "Удалить", tint = Color.White)

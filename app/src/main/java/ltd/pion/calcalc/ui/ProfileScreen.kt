@@ -53,7 +53,7 @@ import ltd.pion.calcalc.domain.Norm
 import ltd.pion.calcalc.update.UpdateState
 
 @Composable
-fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
+fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit, onOpenLog: () -> Unit = {}) {
     val p0 by vm.profile.collectAsState()
     val w0 by vm.weight.collectAsState()
     val update by vm.update.collectAsState()
@@ -82,7 +82,7 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
         onAiUrl = { vm.prefs.aiUrl = it }, onAutoDownload = { vm.prefs.autoDownloadOnWifi = it },
         onCheckUpdate = { vm.checkUpdate() }, onUpdate = vm::downloadAndInstall, modifier = modifier,
         steps = steps, stepCount = stepCount, sync = sync,
-        theme = theme, onTheme = { vm.prefs.theme = it },
+        theme = theme, onTheme = { vm.prefs.theme = it }, onOpenLog = onOpenLog,
         onSteps = {
             if (steps == StepsState.NEEDS_INSTALL) ctx.startActivity(
                 Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${Steps.PROVIDER}&url=healthconnect%3A%2F%2Fonboarding"))
@@ -118,6 +118,7 @@ fun ProfileContent(
     sync: SyncStatus = SyncStatus(false, null, false),
     theme: String = "dark",
     onTheme: (String) -> Unit = {},
+    onOpenLog: () -> Unit = {},
 ) {
     var male by remember(p0) { mutableStateOf(p0.male) }
     var year by remember(p0) { mutableStateOf(p0.birthYear.toString()) }
@@ -218,6 +219,14 @@ fun ProfileContent(
                     Text(if (steps == StepsState.NEEDS_INSTALL) "Установить Health Connect" else "Подключить шаги")
                 }
             }
+        }
+
+        Section("Журнал записей") {
+            Text(
+                "Когда что добавлялось, менялось и удалялось. Удалённую запись можно вернуть.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp,
+            )
+            OutlinedButton(onOpenLog, Modifier.fillMaxWidth()) { Text("Открыть журнал") }
         }
 
         Section("Оформление") {

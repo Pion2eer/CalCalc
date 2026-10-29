@@ -162,4 +162,18 @@ class ScreenshotTest {
     }
 
     @Test fun light_profile() = shot("17_light_profile", dark = false) { profile("pion2er@gmail.com", UpdateState.UpToDate) }
+
+    @Test fun history() = shot("18_history") {
+        fun h(id: Long, action: String, e: Entry, at: Long) = ltd.pion.calcalc.data.History.of(action, e).copy(id = id, at = at)
+        val soup = entries[2]
+        val coffee = entries[1]
+        val list = listOf(
+            h(6, ltd.pion.calcalc.data.HistoryAction.DELETE, soup, at(17, 42) + 13_000),
+            h(5, ltd.pion.calcalc.data.HistoryAction.EDIT, coffee.copy(kcal = 60), at(15, 3) + 5_000),
+            h(4, ltd.pion.calcalc.data.HistoryAction.AI, soup, at(13, 10) + 4_000),
+            h(3, ltd.pion.calcalc.data.HistoryAction.ADD, soup.copy(kcal = null, title = "борщ и хлеб"), at(13, 10)),
+            h(2, ltd.pion.calcalc.data.HistoryAction.ADD, coffee, today.minusDays(1).atTime(8, 35).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()),
+        )
+        HistoryContent(list, setOf(coffee.id), today, {}, {})
+    }
 }

@@ -71,11 +71,30 @@ adb shell input swipe 200 1000 900 1000 250; sleep 2
 shot d4d_swiped_to_yesterday
 adb shell input swipe 900 1000 200 1000 250; sleep 2
 shot d4e_swiped_back_today
-# swipe an entry away, the snackbar offers to bring it back
+# scrolling must not delete: a fast diagonal flick over an entry
+yy=$(adb shell uiautomator dump /sdcard/ui.xml >/dev/null; adb pull /sdcard/ui.xml ui.xml >/dev/null; python3 - <<'PY'
+import re, xml.etree.ElementTree as ET
+for n in ET.parse('ui.xml').iter('node'):
+    if 'grechka' in (n.get('text') or ''):
+        print(sum(map(int, re.findall(r'\d+', n.get('bounds')))[1::2]) // 2); break
+PY
+)
+[ -n "$yy" ] && adb shell input swipe 900 $yy 600 $((yy - 500)) 80; sleep 2
+shot d4f0_after_flick
+# a real swipe only asks; «Удалить» deletes, the snackbar offers to bring it back
 swipe_left_text "grechka"; sleep 1
-shot d4f_swipe_deleted
+shot d4f_swipe_asks
+tap_text "Удалить"; sleep 1
+shot d4f2_deleted
 tap_text "Отменить"; sleep 2
 shot d4g_restored
+# the log shows the deletion and the restore
+tap_text "Профиль"; sleep 2
+tap_text "Открыть журнал" || { adb shell input swipe 500 1800 500 300 300; sleep 1; tap_text "Открыть журнал"; } || { adb shell input swipe 500 1800 500 300 300; sleep 1; tap_text "Открыть журнал"; }
+sleep 2
+shot d4h_log
+adb shell input keyevent 4; sleep 1
+tap_text "Сегодня"; sleep 2
 tap_text "Дневник"; sleep 2
 shot d5_diary
 tap_text "Профиль"; sleep 2

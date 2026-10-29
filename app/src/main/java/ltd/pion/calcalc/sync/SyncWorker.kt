@@ -17,6 +17,8 @@ import kotlinx.coroutines.withContext
 import ltd.pion.calcalc.data.AppDb
 import ltd.pion.calcalc.data.Entry
 import ltd.pion.calcalc.data.EntryStatus
+import ltd.pion.calcalc.data.History
+import ltd.pion.calcalc.data.HistoryAction
 import ltd.pion.calcalc.data.Prefs
 import ltd.pion.calcalc.domain.Norm
 import org.json.JSONArray
@@ -75,13 +77,15 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                             updatedAt = System.currentTimeMillis(),
                         )
                     )
-                    a.ok -> db.entries().update(
-                        now.copy(
+                    a.ok -> {
+                        val done = now.copy(
                             status = EntryStatus.DONE, kcal = a.kcal, estimated = false,
                             title = a.title ?: now.title, protein = a.protein, fat = a.fat, carbs = a.carbs, items = a.items,
                             question = null, options = null, updatedAt = System.currentTimeMillis(),
                         )
-                    )
+                        db.entries().update(done)
+                        db.history().add(History.of(HistoryAction.AI, done))
+                    }
                     a.retry -> {
                         // the PC is off or the model is still loading: try the rest later
                         again = true

@@ -133,6 +133,9 @@ interface EntryDao {
     @Update
     suspend fun update(entry: Entry)
 
+    @Query("SELECT id FROM entries")
+    fun ids(): Flow<List<String>>
+
     @Query("DELETE FROM entries WHERE id = :id")
     suspend fun delete(id: String)
 
@@ -211,24 +214,34 @@ val MIGRATION_4_5 = object : Migration(4, 5) {
     }
 }
 
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS history (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, entryId TEXT NOT NULL, " +
+                "action TEXT NOT NULL, at INTEGER NOT NULL, title TEXT NOT NULL, kcal INTEGER, day TEXT NOT NULL, snapshot TEXT NOT NULL)"
+        )
+    }
+}
+
 val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE entries ADD COLUMN photo TEXT")
     }
 }
 
-@Database(entities = [Entry::class, Weight::class, Favorite::class], version = 5, exportSchema = false)
+@Database(entities = [Entry::class, Weight::class, Favorite::class, History::class], version = 6, exportSchema = false)
 abstract class AppDb : RoomDatabase() {
     abstract fun entries(): EntryDao
     abstract fun weights(): WeightDao
     abstract fun favorites(): FavoriteDao
+    abstract fun history(): HistoryDao
 
     companion object {
         @Volatile private var instance: AppDb? = null
 
         fun get(context: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "calcalc.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build().also { instance = it }
         }
     }

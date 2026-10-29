@@ -17,6 +17,8 @@ import ltd.pion.calcalc.data.AppDb
 import ltd.pion.calcalc.data.DayTotal
 import ltd.pion.calcalc.data.Entry
 import ltd.pion.calcalc.data.Favorite
+import ltd.pion.calcalc.data.History
+import ltd.pion.calcalc.data.HistoryAction
 import ltd.pion.calcalc.data.Template
 import ltd.pion.calcalc.data.EntryStatus
 import ltd.pion.calcalc.data.EntryType
@@ -104,6 +106,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         checkUpdate(silent = true)
+        viewModelScope.launch {
+            val monthAgo = System.currentTimeMillis() - 30L * 24 * 3600 * 1000
+            db.history().prune(System.currentTimeMillis() - 180L * 24 * 3600 * 1000)
+            // photos of entries deleted a month ago and more are no longer needed for «Восстановить»
+            val used = db.entries().all().mapNotNull { it.photo }.toSet()
+            java.io.File(app.filesDir, "photos").listFiles()?.filter { it.path !in used && it.lastModified() < monthAgo }?.forEach { it.delete() }
+        }
+    }
+
+    /** Saves the entry and writes what happened to the log. */
+    private suspend fun save(e: Entry, action: String) {
+        db.entries().upsert(e)
+        db.history().add(History.of(action, e))
+    }
+
+    /** Everything done with the entries, newest first, for the log screen. */
+    val history: StateFlow<List<History>> = db.history().recent()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Ids of entries that exist now: a deleted one in the log can be brought back only if it is not here. */
+    val entryIds: StateFlow<Set<String>> = db.entries().ids().map { it.toSet() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /** Brings a deleted entry back from the log, as it was when it was deleted. */
+    fun restoreFromLog(h: History) = viewModelScope.launch {
+        val e = h.entry().let { if (it.photo != null && !java.io.File(it.photo).exists()) it.copy(photo = null) else it }
+        save(e.copy(synced = false), HistoryAction.RESTORE)
+        SyncWorker.enqueue(getApplication())
     }
 
     private val _steps = MutableStateFlow(StepsState.OFF)
@@ -154,7 +184,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (text.isBlank()) return
         val entry = parseEntry(text, _day.value.toString())
         viewModelScope.launch {
-            db.entries().upsert(entry)
+            save(entry, HistoryAction.ADD)
             SyncWorker.enqueue(getApplication())
         }
     }
@@ -182,11 +212,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun repeat(t: Template, factor: Double = 1.0) = viewModelScope.launch {
         fun scale(v: Double?) = v?.let { Math.round(it * factor * 10) / 10.0 }
         val title = if (factor == 1.0) t.title else t.title + " ×" + (if (factor % 1.0 == 0.0) factor.toInt().toString() else factor.toString().replace('.', ','))
-        db.entries().upsert(
+        save(
             Entry(
                 type = t.type, rawText = t.rawText, title = title, kcal = Math.round(t.kcal * factor).toInt(),
                 protein = scale(t.protein), fat = scale(t.fat), carbs = scale(t.carbs), status = EntryStatus.DONE, day = _day.value.toString(),
-            )
+            ),
+            HistoryAction.ADD,
         )
         SyncWorker.enqueue(getApplication())
     }
@@ -195,11 +226,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun repeatToToday(list: List<Entry>) = viewModelScope.launch {
         val today = LocalDate.now().toString()
         list.filter { it.kcal != null }.forEach {
-            db.entries().upsert(
+            save(
                 it.copy(
                     id = java.util.UUID.randomUUID().toString(), day = today, status = EntryStatus.DONE, photo = null,
                     synced = false, createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis(),
-                )
+                ),
+                HistoryAction.ADD,
             )
         }
         SyncWorker.enqueue(getApplication())
@@ -222,11 +254,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val id = java.util.UUID.randomUUID().toString()
         val path = Photos.save(getApplication(), uri, id) ?: return@launch
         val words = text.trim()
-        db.entries().upsert(
+        save(
             Entry(
                 id = id, type = EntryType.FOOD, rawText = words, title = words.ifBlank { "Фото еды" }, kcal = null,
                 status = EntryStatus.QUEUED, day = _day.value.toString(), photo = path,
-            )
+            ),
+            HistoryAction.ADD,
         )
         SyncWorker.enqueue(getApplication())
     }
@@ -238,7 +271,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // the photo stays with food: the new words only add to what the picture shows
         val fresh = if (parsed.type == EntryType.FOOD) parsed.copy(photo = entry.photo) else parsed
         viewModelScope.launch {
-            db.entries().upsert(fresh)
+            save(fresh, HistoryAction.EDIT)
             SyncWorker.enqueue(getApplication())
         }
     }
@@ -261,23 +294,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setKcal(entry: Entry, kcal: Int) = viewModelScope.launch {
-        db.entries().update(
+        save(
             entry.copy(
                 kcal = kcal, estimated = false, status = EntryStatus.DONE, editedByUser = true,
                 synced = false, updatedAt = System.currentTimeMillis(),
-            )
+            ),
+            HistoryAction.EDIT,
         )
         SyncWorker.enqueue(getApplication())
     }
 
-    fun delete(entry: Entry, keepPhoto: Boolean = false) = viewModelScope.launch {
+    /** The photo file stays a month after deletion, so the entry can still be restored from the log. */
+    fun delete(entry: Entry) = viewModelScope.launch {
         db.entries().delete(entry.id)
-        if (!keepPhoto) entry.photo?.let { java.io.File(it).delete() }
+        db.history().add(History.of(HistoryAction.DELETE, entry))
     }
 
     /** «Отменить» after a swipe: the entry comes back as it was. */
     fun restore(entry: Entry) = viewModelScope.launch {
-        db.entries().upsert(entry)
+        save(entry, HistoryAction.RESTORE)
         SyncWorker.enqueue(getApplication())
     }
 

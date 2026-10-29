@@ -33,6 +33,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -127,21 +128,23 @@ fun CalCalcTheme(dark: Boolean = true, content: @Composable () -> Unit) {
 @Composable
 fun Root(vm: AppViewModel) {
     var tab by rememberSaveable { mutableIntStateOf(if (vm.prefs.profileDone) 0 else 2) }
+    var log by rememberSaveable { mutableStateOf(false) }
     Scaffold(
         bottomBar = {
             NavigationBar {
-                NavigationBarItem(tab == 0, { tab = 0 }, { Icon(Icons.Filled.Restaurant, null) }, label = { Text("Сегодня") })
-                NavigationBarItem(tab == 1, { tab = 1 }, { Icon(Icons.Filled.TableChart, null) }, label = { Text("Дневник") })
-                NavigationBarItem(tab == 2, { tab = 2 }, { Icon(Icons.Filled.Person, null) }, label = { Text("Профиль") })
+                NavigationBarItem(tab == 0 && !log, { tab = 0; log = false }, { Icon(Icons.Filled.Restaurant, null) }, label = { Text("Сегодня") })
+                NavigationBarItem(tab == 1 && !log, { tab = 1; log = false }, { Icon(Icons.Filled.TableChart, null) }, label = { Text("Дневник") })
+                NavigationBarItem(tab == 2 && !log, { tab = 2; log = false }, { Icon(Icons.Filled.Person, null) }, label = { Text("Профиль") })
             }
         },
     ) { pad ->
         // the bottom bar already covers the navigation bar, so the keyboard only adds what it takes beyond it
         val m = Modifier.padding(pad).consumeWindowInsets(pad).imePadding()
-        when (tab) {
-            0 -> TodayScreen(vm, m)
-            1 -> DiaryScreen(vm, m)
-            else -> ProfileScreen(vm, m, onSaved = { tab = 0 })
+        when {
+            log -> HistoryScreen(vm, onClose = { log = false }, m)
+            tab == 0 -> TodayScreen(vm, m)
+            tab == 1 -> DiaryScreen(vm, m)
+            else -> ProfileScreen(vm, m, onSaved = { tab = 0 }, onOpenLog = { log = true })
         }
     }
 }
