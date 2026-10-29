@@ -807,6 +807,11 @@ fun UpdateBanner(state: UpdateState, onUpdate: () -> Unit) {
             progress = { state.percent / 100f }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
         val notes = (state as? UpdateState.Available)?.release?.notes.orEmpty()
-        if (notes.isNotBlank()) Text(notes, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // three lines at most, a tap shows the rest: the banner must not push the day off the screen
+        var open by remember { mutableStateOf(false) }
+        if (notes.isNotBlank()) Text(
+            notes, Modifier.clickable { open = !open }, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = if (open) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis,
+        )
     }
 }
