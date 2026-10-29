@@ -126,6 +126,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val dayFmt = DateTimeFormatter.ofPattern("d MMMM, EEEE", Locale("ru"))
+private val monthFmt = DateTimeFormatter.ofPattern("LLLL yyyy", Locale("ru"))
 private val Over: Color @Composable @ReadOnlyComposable get() = Danger
 private val ProteinColor: Color @Composable @ReadOnlyComposable get() = Color(if (LocalDark.current) 0xFF64B5F6 else 0xFF1E88E5)
 private val FatColor: Color @Composable @ReadOnlyComposable get() = Color(if (LocalDark.current) 0xFFF06292 else 0xFFD81B60)
@@ -290,16 +291,14 @@ private fun DayPage(
                         onRepeat = if (day != today && counted.isNotEmpty()) ({ onRepeatGroup(name, counted) }) else null,
                     )
                 }
-                item(key = "g$name") {
+                // every entry is its own card, as in the reference design
+                items(list, key = { it.id }) { e ->
                     Surface(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                        shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface,
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = CardShadow,
                     ) {
-                        Column {
-                            list.forEach { e ->
-                                key(e.id) { SwipeRow(e.title, onDelete = { onSwipeDelete(e) }) { EntryRow(e, waiting = aiBlocker != null, onClick = { onOpen(e) }) } }
-                            }
-                        }
+                        SwipeRow(e.title, onDelete = { onSwipeDelete(e) }) { EntryRow(e, waiting = aiBlocker != null, onClick = { onOpen(e) }) }
                     }
                 }
             }
@@ -309,38 +308,85 @@ private fun DayPage(
 
 @Composable
 private fun DayHeader(day: LocalDate, today: LocalDate, onShiftDay: (Long) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton({ onShiftDay(-1) }) { Icon(Icons.Filled.ChevronLeft, "Предыдущий день") }
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                when (day) {
-                    today -> "Сегодня"
-                    today.minusDays(1) -> "Вчера"
-                    else -> day.format(dayFmt).replaceFirstChar { it.uppercase() }
-                },
-                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold,
-            )
-            if (day == today || day == today.minusDays(1)) Text(
-                day.format(dayFmt), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    when (day) {
+                        today -> "Сегодня"
+                        today.minusDays(1) -> "Вчера"
+                        else -> day.format(monthFmt).replaceFirstChar { it.uppercase() }
+                    },
+                    fontSize = 26.sp, fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    day.format(dayFmt).replaceFirstChar { it.uppercase() }, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            RoundButton(Icons.Filled.ChevronLeft, "Предыдущая неделя") { onShiftDay(-7) }
+            Spacer(Modifier.width(8.dp))
+            RoundButton(Icons.Filled.ChevronRight, "Следующая неделя", enabled = day.isBefore(today)) {
+                // never past today
+                onShiftDay(minOf(7L, ChronoUnit.DAYS.between(day, today)))
+            }
         }
-        IconButton({ onShiftDay(1) }, enabled = day.isBefore(today)) {
-            Icon(Icons.Filled.ChevronRight, "Следующий день")
+        WeekStrip(day, today, onShiftDay)
+    }
+}
+
+@Composable
+private fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick, enabled = enabled, shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.3f),
+        shadowElevation = CardShadow, modifier = Modifier.size(40.dp),
+    ) { Box(contentAlignment = Alignment.Center) { Icon(icon, label) } }
+}
+
+/** Monday to Sunday of the shown day's week; the shown day is the dark pill, days after today cannot be picked. */
+@Composable
+private fun WeekStrip(day: LocalDate, today: LocalDate, onShiftDay: (Long) -> Unit) {
+    val monday = day.minusDays(day.dayOfWeek.value - 1L)
+    Row(Modifier.fillMaxWidth().padding(top = 12.dp, end = 8.dp, bottom = 4.dp)) {
+        (0..6).map { monday.plusDays(it.toLong()) }.forEach { d ->
+            val selected = d == day
+            val future = d.isAfter(today)
+            Column(
+                Modifier.weight(1f).padding(horizontal = 2.dp).clip(RoundedCornerShape(16.dp))
+                    .background(if (selected) HeroBg else Color.Transparent)
+                    .clickable(enabled = !future && !selected) { onShiftDay(ChronoUnit.DAYS.between(day, d)) }
+                    .padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                val c = when {
+                    selected -> Color.White
+                    future -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                Text(d.dayOfWeek.getDisplayName(java.time.format.TextStyle.SHORT, Locale("ru")).replaceFirstChar { it.uppercase() }, fontSize = 12.sp, color = c)
+                Text(
+                    "${d.dayOfMonth}", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                    color = if (selected) Color.White else if (future) c else MaterialTheme.colorScheme.onSurface,
+                )
+                // a dot under today
+                Box(Modifier.padding(top = 3.dp).size(4.dp).clip(CircleShape).background(if (d == today) Accent else Color.Transparent))
+            }
         }
     }
 }
 
 @Composable
 private fun SummaryCard(s: DaySummary, entries: List<Entry>, aiBlocker: String?) {
+    // the dark accent card of the reference design: the day's main numbers
     Surface(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface,
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(28.dp), color = HeroBg, contentColor = Color.White, shadowElevation = CardShadow,
     ) {
-        Column(Modifier.padding(vertical = 16.dp, horizontal = 12.dp)) {
+        Column(Modifier.padding(vertical = 18.dp, horizontal = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SideStat("Съедено", s.eaten, MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
+                SideStat("Съедено", s.eaten, Color.White, Modifier.weight(1f))
                 Ring(s)
-                SideStat("Сожжено", s.burned, Burn, Modifier.weight(1f))
+                SideStat("Сожжено", s.burned, Color(0xFFFFB74D), Modifier.weight(1f))
             }
             Spacer(Modifier.height(14.dp))
             val p = entries.sumOf { it.protein ?: 0.0 }
@@ -349,21 +395,21 @@ private fun SummaryCard(s: DaySummary, entries: List<Entry>, aiBlocker: String?)
             // a usual split of the daily norm: 20% protein, 30% fat, 50% carbs
             val budget = s.norm + s.burned
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
-                Macro("Белки", p, budget * 0.20 / 4, ProteinColor, Modifier.weight(1f))
-                Macro("Жиры", f, budget * 0.30 / 9, FatColor, Modifier.weight(1f))
-                Macro("Углеводы", c, budget * 0.50 / 4, CarbsColor, Modifier.weight(1f))
+                Macro("Белки", p, budget * 0.20 / 4, Color(0xFF64B5F6), Modifier.weight(1f))
+                Macro("Жиры", f, budget * 0.30 / 9, Color(0xFFF06292), Modifier.weight(1f))
+                Macro("Углеводы", c, budget * 0.50 / 4, Color(0xFFFFD54F), Modifier.weight(1f))
             }
             if (s.pending > 0) Row(
                 Modifier.fillMaxWidth().padding(top = 14.dp),
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (aiBlocker == null) {
-                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Warn)
+                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Color(0xFFFFD54F))
                     Spacer(Modifier.width(8.dp))
-                    Text("ИИ считает: ${s.pending} ${plural(s.pending, "запись", "записи", "записей")}", color = Warn, fontSize = 13.sp)
+                    Text("ИИ считает: ${s.pending} ${plural(s.pending, "запись", "записи", "записей")}", color = Color(0xFFFFD54F), fontSize = 13.sp)
                 } else {
                     Text(
-                        "Ждут ИИ: ${s.pending}. $aiBlocker", color = Warn, fontSize = 13.sp,
+                        "Ждут ИИ: ${s.pending}. $aiBlocker", color = Color(0xFFFFD54F), fontSize = 13.sp,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     )
                 }
@@ -376,7 +422,7 @@ private fun SummaryCard(s: DaySummary, entries: List<Entry>, aiBlocker: String?)
 private fun SideStat(label: String, value: Int, color: Color, modifier: Modifier) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text("$value", fontWeight = FontWeight.Bold, color = color, fontSize = 22.sp)
-        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+        Text(label, color = HeroMuted, fontSize = 13.sp)
     }
 }
 
@@ -385,8 +431,8 @@ private fun Ring(s: DaySummary) {
     val budget = (s.norm + s.burned).coerceAtLeast(1)
     val frac = (s.eaten.toFloat() / budget).coerceIn(0f, 1f)
     val over = s.left < 0
-    val track = MaterialTheme.colorScheme.background
-    val arc = if (over) Over else Accent
+    val track = Color.White.copy(alpha = 0.12f)
+    val arc = if (over) Over else Color(0xFF3DDC84)
     Box(Modifier.size(140.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val w = 12.dp.toPx()
@@ -396,8 +442,8 @@ private fun Ring(s: DaySummary) {
             if (frac > 0f) drawArc(arc, -90f, 360f * frac, false, tl, box, style = Stroke(w, cap = StrokeCap.Round))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("${kotlin.math.abs(s.left)}", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = if (over) Over else MaterialTheme.colorScheme.onSurface)
-            Text(if (over) "ккал сверх" else "ккал осталось", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+            Text("${kotlin.math.abs(s.left)}", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = if (over) Color(0xFFFF7A75) else Color.White)
+            Text(if (over) "ккал сверх" else "ккал осталось", color = HeroMuted, fontSize = 12.sp)
         }
     }
 }
@@ -405,12 +451,12 @@ private fun Ring(s: DaySummary) {
 @Composable
 private fun Macro(label: String, grams: Double, goal: Double, color: Color, modifier: Modifier) {
     Column(modifier) {
-        Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, fontSize = 12.sp, color = HeroMuted)
         Spacer(Modifier.height(4.dp))
         LinearProgressIndicator(
             progress = { (grams / goal.coerceAtLeast(1.0)).toFloat().coerceIn(0f, 1f) },
             modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
-            color = color, trackColor = MaterialTheme.colorScheme.background, drawStopIndicator = {}, gapSize = 0.dp,
+            color = color, trackColor = Color.White.copy(alpha = 0.12f), drawStopIndicator = {}, gapSize = 0.dp,
         )
         Spacer(Modifier.height(4.dp))
         Text("${grams.toInt()} / ${goal.toInt()} г", fontSize = 12.sp)
@@ -582,9 +628,8 @@ private fun InputBar(
 ) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
             Spacer(Modifier.height(8.dp))
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // starred and frequent food first: one tap adds it again with the same calories
                 // a long press asks for the portion: half, one and a half, double
                 items(quick, key = { "t" + it.template.title }) { q ->
@@ -611,6 +656,7 @@ private fun InputBar(
                     Surface(
                         onClick = { onQuick(q) }, shape = RoundedCornerShape(50),
                         color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface,
+                        shadowElevation = CardShadow / 2,
                     ) {
                         Text(q, Modifier.padding(horizontal = 14.dp, vertical = 8.dp), fontSize = 14.sp)
                     }
@@ -661,7 +707,7 @@ private fun InputBar(
                         ) else onSend()
                     },
                     Modifier.size(52.dp), enabled = mic || input.isNotBlank(),
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = Accent, contentColor = MaterialTheme.colorScheme.onPrimary),
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = HeroBg, contentColor = Color.White),
                 ) {
                     if (mic) Icon(Icons.Filled.Mic, "Сказать голосом") else Icon(Icons.AutoMirrored.Filled.Send, "Добавить")
                 }

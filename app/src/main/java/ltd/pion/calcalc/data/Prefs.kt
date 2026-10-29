@@ -68,7 +68,7 @@ class Prefs(context: Context) {
 
     /** "dark", "light" or "system". */
     var theme: String
-        get() = sp.getString("theme", "dark") ?: "dark"
+        get() = sp.getString("theme", "light") ?: "light"
         set(v) = sp.edit().putString("theme", v).apply()
 
     var profileDone: Boolean

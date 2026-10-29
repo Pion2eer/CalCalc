@@ -107,7 +107,7 @@ private fun Event(h: History, today: LocalDate, canRestore: Boolean, onRestore: 
         HistoryAction.DELETE -> "Удалено" to Danger
         else -> "Восстановлено" to Accent
     }
-    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface) {
+    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = CardShadow) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(Instant.ofEpochMilli(h.at).atZone(zone).toLocalTime().format(timeFmt), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -62,7 +62,7 @@ class ScreenshotTest {
     private val summary = DaySummary(norm = 2100, eaten = 910, burned = 400, pending = 2)
     private val release = Release(5, "0.1.5", "", "", "Новый экран «Сегодня»")
 
-    private fun shot(name: String, dark: Boolean = true, content: @Composable () -> Unit) {
+    private fun shot(name: String, dark: Boolean = false, content: @Composable () -> Unit) {
         // spinners never stop, so time is moved by hand instead of waiting for the screen to settle
         compose.mainClock.autoAdvance = false
         compose.setContent {
@@ -151,17 +151,17 @@ class ScreenshotTest {
         ))
     }
 
-    @Test fun light_today() = shot("15_light_today", dark = false) { today(entries, summary, quick = listOf(
+    @Test fun light_today() = shot("15_dark_today", dark = true) { today(entries, summary, quick = listOf(
         QuickItem(Template("Кофе с молоком", "кофе с молоком", EntryType.FOOD, 78, 3.0, 3.0, 5.0), true),
     )) }
 
-    @Test fun light_diary() = shot("16_light_diary", dark = false) {
+    @Test fun light_diary() = shot("16_dark_diary", dark = true) {
         val totals = (0 until 7).map { DayTotal(today.minusDays(it.toLong()).toString(), listOf(1850, 2300, 1600, 2050, 1700, 1950, 2400)[it], 0) }
         val weights = listOf(20 to 84.0, 10 to 83.4, 0 to 82.5).map { (d, kg) -> ltd.pion.calcalc.data.Weight(today.minusDays(d.toLong()).toString(), kg) }
         DiaryContent(totals, 2100, today, weights = weights)
     }
 
-    @Test fun light_profile() = shot("17_light_profile", dark = false) { profile("pion2er@gmail.com", UpdateState.UpToDate) }
+    @Test fun light_profile() = shot("17_dark_profile", dark = true) { profile("pion2er@gmail.com", UpdateState.UpToDate) }
 
     @Test fun history() = shot("18_history") {
         fun h(id: Long, action: String, e: Entry, at: Long) = ltd.pion.calcalc.data.History.of(action, e).copy(id = id, at = at)

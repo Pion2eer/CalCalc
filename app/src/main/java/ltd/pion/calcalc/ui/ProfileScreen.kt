@@ -116,7 +116,7 @@ fun ProfileContent(
     stepCount: Long? = null,
     onSteps: () -> Unit = {},
     sync: SyncStatus = SyncStatus(false, null, false),
-    theme: String = "dark",
+    theme: String = "light",
     onTheme: (String) -> Unit = {},
     onOpenLog: () -> Unit = {},
 ) {
@@ -137,7 +137,7 @@ fun ProfileContent(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Профиль", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+        Text("Профиль", fontSize = 26.sp, fontWeight = FontWeight.Bold)
 
         Section("О себе") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -270,8 +270,8 @@ fun ProfileContent(
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
-    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = CardShadow) {
+        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             content()
         }

@@ -38,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
@@ -82,6 +83,13 @@ val LocalDark = staticCompositionLocalOf { true }
 val Accent: Color @Composable @ReadOnlyComposable get() = Color(if (LocalDark.current) 0xFF3DDC84 else 0xFF1E9E57)
 val Burn: Color @Composable @ReadOnlyComposable get() = Color(if (LocalDark.current) 0xFFFFB74D else 0xFFE07B00)
 val Warn: Color @Composable @ReadOnlyComposable get() = Color(if (LocalDark.current) 0xFFFFD54F else 0xFFB07A00)
+/** The dark accent card on top of «Сегодня» and the round send button, as in the light reference design. */
+val HeroBg: Color @Composable @ReadOnlyComposable get() = Color(if (LocalDark.current) 0xFF1E2A35 else 0xFF16222E)
+val HeroMuted = Color(0xFFA7B4C0)
+
+/** Light cards float on a soft shadow; in the dark theme the shadow would not show, so it is left out. */
+val CardShadow: androidx.compose.ui.unit.Dp @Composable @ReadOnlyComposable get() = if (LocalDark.current) 0.dp else 3.dp
+
 val Danger: Color @Composable @ReadOnlyComposable get() = Color(if (LocalDark.current) 0xFFEF5350 else 0xFFD32F2F)
 
 @Composable
@@ -104,9 +112,9 @@ fun CalCalcTheme(dark: Boolean = true, content: @Composable () -> Unit) {
     ) else lightColorScheme(
         primary = Color(0xFF1E9E57),
         onPrimary = Color.White,
-        background = Color(0xFFF3F5F7),
+        background = Color(0xFFF1F3F6),
         onBackground = Color(0xFF15181B),
-        surface = Color(0xFFF3F5F7),
+        surface = Color(0xFFF1F3F6),
         onSurface = Color(0xFF15181B),
         // cards are white on a light grey page
         surfaceVariant = Color.White,

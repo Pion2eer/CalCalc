@@ -60,7 +60,7 @@ fun DiaryContent(totals: List<DayTotal>, norm: Int, today: LocalDate, modifier: 
     val logged = week.mapNotNull { byDay[it.toString()] }.filter { it.eaten > 0 }
 
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Дневник", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold) }
+        item { Text("Дневник", fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp)) }
 
         item {
             Card {
@@ -97,7 +97,7 @@ fun DiaryContent(totals: List<DayTotal>, norm: Int, today: LocalDate, modifier: 
             )
         }
         if (days.isNotEmpty()) item {
-            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface) {
+            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = CardShadow) {
                 Column {
                     days.forEachIndexed { i, t ->
                         if (i > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.background)
@@ -111,8 +111,8 @@ fun DiaryContent(totals: List<DayTotal>, norm: Int, today: LocalDate, modifier: 
 
 @Composable
 private fun Card(content: @Composable () -> Unit) {
-    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) { content() }
+    Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = CardShadow) {
+        Column(Modifier.fillMaxWidth().padding(18.dp)) { content() }
     }
 }
 
