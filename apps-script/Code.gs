@@ -86,6 +86,16 @@ function selfTest() {
 }
 
 /** Run by hand from the editor after a prompt change: a few known foods, results go to the journal. */
+/** Sends a known food photo to the PC from the editor: shows whether the model on the PC understands pictures. */
+function testImage() {
+  var pc = pc_();
+  var url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Good_Food_Display_-_NCI_Visuals_Online.jpg/640px-Good_Food_Display_-_NCI_Visuals_Online.jpg';
+  var img = Utilities.base64Encode(UrlFetchApp.fetch(url).getBlob().getBytes());
+  var t0 = Date.now();
+  var a = askPc_(pc, 'Еда на фото', img);
+  log_('test', '', '[фото] ' + (a.ok ? a.title + ', ' + a.kcal + ' ккал' + (a.question ? ', вопрос: ' + a.question : '') : 'ошибка: ' + a.error), Date.now() - t0);
+}
+
 function testAi() {
   var pc = pc_();
   ['Водка 200 мл', 'Водка 200 мл\nУточнение: Какая крепость водки? — 40%', 'Суп томям с курицей тарелка',
@@ -176,7 +186,11 @@ function parse_(b) {
     return { ok: false, error: 'Нет доступа к ИИ для ' + email };
   }
   var text = String(b.text || '').slice(0, 1000);
-  if (!text) return { ok: false, error: 'empty' };
+  // a photo of the food comes as base64 JPEG, with the user's words (if any) as a hint
+  var image = b.image ? String(b.image) : null;
+  if (image && image.length > 3000000) return { ok: false, error: 'Фото слишком большое' };
+  if (!text && !image) return { ok: false, error: 'empty' };
+  if (!text) text = 'Еда на фото';
 
   var pc = pc_();
   if (!pc || !fresh_(pc) || pc.paused) {
@@ -185,12 +199,14 @@ function parse_(b) {
     return { ok: false, retry: true, error: 'Компьютер с ИИ недоступен' };
   }
   var t0 = Date.now();
-  var res = askPc_(pc, text);
-  log_('parse', email, text + ' → ' + (res.ok ? res.title + ', ' + res.kcal + ' ккал' + (res.question ? ', вопрос: ' + res.question : '') : 'ошибка: ' + res.error), Date.now() - t0);
+  var res = askPc_(pc, text, image);
+  log_('parse', email, (image ? '[фото] ' : '') + text + ' → ' + (res.ok ? res.title + ', ' + res.kcal + ' ккал' + (res.question ? ', вопрос: ' + res.question : '') : 'ошибка: ' + res.error), Date.now() - t0);
   return res;
 }
 
-function askPc_(pc, text) {
+function askPc_(pc, text, image) {
+  var user = { role: 'user', content: image ? 'На фото еда. Определи продукты и оцени вес каждого по фото. ' + text : text };
+  if (image) user.images = [image];
   var r;
   try {
     r = UrlFetchApp.fetch(pc.url + '/chat', {
@@ -200,7 +216,7 @@ function askPc_(pc, text) {
         // gemma4 thinks before answering unless told not to; with thinking a short answer took minutes
         model: pc.model, stream: false, format: 'json', think: false, keep_alive: '24h',
         options: { temperature: 0.2, num_predict: 500 },
-        messages: [{ role: 'system', content: PROMPT }, { role: 'user', content: text }],
+        messages: [{ role: 'system', content: PROMPT }, user],
       }),
     });
   } catch (x) {
