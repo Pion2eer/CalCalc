@@ -105,6 +105,9 @@ interface EntryDao {
     @Query("SELECT * FROM entries ORDER BY day, createdAt")
     suspend fun all(): List<Entry>
 
+    @Query("SELECT COUNT(*) FROM entries WHERE type = 'food' AND status IN ('queued', 'processing')")
+    fun waitingCount(): Flow<Int>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: Entry)
 

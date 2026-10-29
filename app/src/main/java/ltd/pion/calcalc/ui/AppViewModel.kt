@@ -35,6 +35,8 @@ import ltd.pion.calcalc.update.UpdateState
 import ltd.pion.calcalc.update.Updater
 import java.time.LocalDate
 
+data class SyncStatus(val running: Boolean, val text: String?, val warn: Boolean)
+
 data class DaySummary(
     val norm: Int,
     val eaten: Int,
@@ -274,6 +276,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun syncNow() = SyncWorker.enqueue(getApplication())
+
+    /** What the sync is doing, in words for the profile: sending now, what is waiting and why, or when it last worked. */
+    val syncStatus: StateFlow<SyncStatus> = combine(
+        androidx.work.WorkManager.getInstance(app).getWorkInfosForUniqueWorkFlow("sync"),
+        db.entries().waitingCount(),
+        prefs.changes(),
+    ) { infos, waiting, _ ->
+        val running = infos.any { it.state == androidx.work.WorkInfo.State.RUNNING }
+        val text = when {
+            running -> if (waiting > 0) "Отправляю ИИ: $waiting" else "Обновляю таблицу…"
+            prefs.aiProblem != null -> prefs.aiProblem!! + if (waiting > 0) " (ждут: $waiting)" else ""
+            waiting > 0 -> "Ждут ИИ: $waiting, отправлю, как будет связь"
+            prefs.lastSync > 0 -> "Всё посчитано, таблица обновлена в " +
+                java.time.Instant.ofEpochMilli(prefs.lastSync).atZone(java.time.ZoneId.systemDefault()).toLocalTime()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+            else -> null
+        }
+        SyncStatus(running, text, warn = !running && (prefs.aiProblem != null))
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, SyncStatus(false, null, false))
 
     fun checkUpdate(silent: Boolean = false) {
         if (_update.value is UpdateState.Checking || _update.value is UpdateState.Downloading) return

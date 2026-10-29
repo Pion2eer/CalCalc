@@ -98,6 +98,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             report(prefs, token, "sheet sync failed: $ex")
             again = true
         }
+        if (!again) prefs.lastSync = System.currentTimeMillis()
         return if (again) Result.retry() else Result.success()
     }
 

@@ -109,14 +109,22 @@ class ScreenshotTest {
     @Test fun diary_empty() = shot("08_diary_empty") { DiaryContent(emptyList(), 2100, today) }
 
     @Composable
-    private fun profile(account: String?, update: UpdateState) = ProfileContent(
+    private fun profile(account: String?, update: UpdateState, sync: SyncStatus = SyncStatus(false, null, false)) = ProfileContent(
         Profile(true, 1990, 180, -1), 82.5, update, account, null,
         if (account != null) "https://docs.google.com/spreadsheets/d/x" else null,
         "https://script.google.com/macros/s/x/exec", true, "0.1.5",
-        { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {},
+        { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {}, sync = sync,
     )
 
     @Test fun profile_signed_out() = shot("09_profile_signed_out") { profile(null, UpdateState.Idle) }
 
     @Test fun profile_signed_in() = shot("10_profile_signed_in") { profile("pion2er@gmail.com", UpdateState.UpToDate) }
+
+    @Test fun profile_syncing() = shot("11_profile_syncing") {
+        profile("pion2er@gmail.com", UpdateState.UpToDate, SyncStatus(true, "Отправляю ИИ: 2", false))
+    }
+
+    @Test fun profile_sync_problem() = shot("12_profile_sync_problem") {
+        profile("pion2er@gmail.com", UpdateState.UpToDate, SyncStatus(false, "Компьютер с ИИ недоступен (ждут: 1)", true))
+    }
 }

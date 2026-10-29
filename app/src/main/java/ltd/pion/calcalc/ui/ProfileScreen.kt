@@ -40,6 +40,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -59,6 +62,7 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
     val ctx = LocalContext.current
     val steps by vm.steps.collectAsState()
     val stepCount by vm.stepCount.collectAsState()
+    val sync by vm.syncStatus.collectAsState()
     val stepsLauncher = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) {
         vm.refreshSteps()
     }
@@ -76,7 +80,7 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit) {
         onSync = vm::syncNow, onSignOut = vm::signOut,
         onAiUrl = { vm.prefs.aiUrl = it }, onAutoDownload = { vm.prefs.autoDownloadOnWifi = it },
         onCheckUpdate = { vm.checkUpdate() }, onUpdate = vm::downloadAndInstall, modifier = modifier,
-        steps = steps, stepCount = stepCount,
+        steps = steps, stepCount = stepCount, sync = sync,
         onSteps = {
             if (steps == StepsState.NEEDS_INSTALL) ctx.startActivity(
                 Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${Steps.PROVIDER}&url=healthconnect%3A%2F%2Fonboarding"))
@@ -109,6 +113,7 @@ fun ProfileContent(
     steps: StepsState = StepsState.OFF,
     stepCount: Long? = null,
     onSteps: () -> Unit = {},
+    sync: SyncStatus = SyncStatus(false, null, false),
 ) {
     var male by remember(p0) { mutableStateOf(p0.male) }
     var year by remember(p0) { mutableStateOf(p0.birthYear.toString()) }
@@ -173,7 +178,16 @@ fun ProfileContent(
                 sheetUrl?.let { u ->
                     OutlinedButton({ onOpenSheet(u) }, Modifier.fillMaxWidth()) { Text("Открыть мою таблицу") }
                 }
-                OutlinedButton(onSync, Modifier.fillMaxWidth()) { Text("Синхронизировать сейчас") }
+                OutlinedButton(onSync, Modifier.fillMaxWidth(), enabled = !sync.running) {
+                    if (sync.running) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Синхронизирую…")
+                    } else Text("Синхронизировать сейчас")
+                }
+                sync.text?.let {
+                    Text(it, fontSize = 13.sp, color = if (sync.warn) Warn else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 TextButton(onSignOut, Modifier.fillMaxWidth()) { Text("Выйти из аккаунта") }
             }
             authError?.let { Text(it, color = Warn, fontSize = 13.sp) }

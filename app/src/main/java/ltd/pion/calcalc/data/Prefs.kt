@@ -52,6 +52,11 @@ class Prefs(context: Context) {
         get() = sp.getLong("lastSheetSync", 0)
         set(v) = sp.edit().putLong("lastSheetSync", v).apply()
 
+    /** When a sync last finished without errors, for the status line in the profile. */
+    var lastSync: Long
+        get() = sp.getLong("lastSync", 0)
+        set(v) = sp.edit().putLong("lastSync", v).apply()
+
     var autoDownloadOnWifi: Boolean
         get() = sp.getBoolean("autoDownloadOnWifi", true)
         set(v) = sp.edit().putBoolean("autoDownloadOnWifi", v).apply()
