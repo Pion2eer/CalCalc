@@ -28,6 +28,19 @@ PY
 )
   [ -n "$tap_text_xy" ] && adb shell input swipe 1000 $tap_text_xy 150 $tap_text_xy 400
 }
+tap_exact() {  # tap the element whose text is exactly $1
+  adb shell uiautomator dump /sdcard/ui.xml >/dev/null
+  adb pull /sdcard/ui.xml ui.xml >/dev/null
+  b=$(python3 - "$1" <<'PY'
+import re, sys, xml.etree.ElementTree as ET
+for n in ET.parse('ui.xml').iter('node'):
+    if (n.get('text') or '') == sys.argv[1]:
+        x1, y1, x2, y2 = map(int, re.findall(r'\d+', n.get('bounds')))
+        print((x1 + x2) // 2, (y1 + y2) // 2); break
+PY
+)
+  [ -n "$b" ] && adb shell input tap $b
+}
 shot() { adb exec-out screencap -p > $out/$1.png; }
 
 adb install -r CalCalc-debug.apk
@@ -84,7 +97,7 @@ shot d4f0_after_flick
 # a real swipe only asks; «Удалить» deletes, the snackbar offers to bring it back
 swipe_left_text "grechka"; sleep 1
 shot d4f_swipe_asks
-tap_text "Удалить"; sleep 1
+tap_exact "Удалить"; sleep 1
 shot d4f2_deleted
 tap_text "Отменить"; sleep 2
 shot d4g_restored
