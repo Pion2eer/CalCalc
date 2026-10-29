@@ -41,6 +41,9 @@ adb shell input keyevent 4; sleep 1; adb shell input keyevent 4; sleep 2
 # the two backs can leave the app when the keyboard was already hidden: bring it to the front again
 adb shell am start -W -n ltd.pion.calcalc/.ui.MainActivity; sleep 2
 tap_text "Сегодня"; sleep 2
+# a slow swipe, caught halfway: the day should follow the finger
+adb shell input swipe 150 1000 650 1000 2500 & sleep 1.6; shot d4c2_mid_swipe; wait; sleep 2
+adb shell input swipe 650 1000 150 1000 300; sleep 2
 adb shell input swipe 200 1000 900 1000 250; sleep 2
 shot d4d_swiped_to_yesterday
 adb shell input swipe 900 1000 200 1000 250; sleep 2
