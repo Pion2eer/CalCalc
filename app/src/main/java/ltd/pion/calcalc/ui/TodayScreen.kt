@@ -108,6 +108,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ltd.pion.calcalc.data.Entry
@@ -122,6 +123,9 @@ import java.util.Locale
 
 private val dayFmt = DateTimeFormatter.ofPattern("d MMMM, EEEE", Locale("ru"))
 private val Over = Color(0xFFEF5350)
+private val ProteinColor = Color(0xFF64B5F6)
+private val FatColor = Color(0xFFF06292)
+private val CarbsColor = Color(0xFFFFD54F)
 val QuickAdds = listOf("Падел 1 час", "Ходьба 30 мин", "Зал 1 час", "+100 ккал")
 
 @Composable
@@ -341,9 +345,9 @@ private fun SummaryCard(s: DaySummary, entries: List<Entry>, aiBlocker: String?)
             // a usual split of the daily norm: 20% protein, 30% fat, 50% carbs
             val budget = s.norm + s.burned
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
-                Macro("Белки", p, budget * 0.20 / 4, Color(0xFF64B5F6), Modifier.weight(1f))
-                Macro("Жиры", f, budget * 0.30 / 9, Color(0xFFF06292), Modifier.weight(1f))
-                Macro("Углеводы", c, budget * 0.50 / 4, Color(0xFFFFD54F), Modifier.weight(1f))
+                Macro("Белки", p, budget * 0.20 / 4, ProteinColor, Modifier.weight(1f))
+                Macro("Жиры", f, budget * 0.30 / 9, FatColor, Modifier.weight(1f))
+                Macro("Углеводы", c, budget * 0.50 / 4, CarbsColor, Modifier.weight(1f))
             }
             if (s.pending > 0) Row(
                 Modifier.fillMaxWidth().padding(top = 14.dp),
@@ -468,11 +472,23 @@ private fun EntryRow(e: Entry, waiting: Boolean, onClick: () -> Unit) {
                 e.status == EntryStatus.FAILED -> "ИИ не разобрал. Нажмите, чтобы ввести вручную" to true
                 k == null && waiting -> "Ждёт ИИ. Нажмите, чтобы ввести ккал вручную" to true
                 k == null -> "ИИ считает…" to true
-                e.protein != null -> "Б ${e.protein.toInt()} · Ж ${(e.fat ?: 0.0).toInt()} · У ${(e.carbs ?: 0.0).toInt()}" + (if (e.estimated) " · примерно" else "") to false
+                e.protein != null -> null to false
                 e.estimated -> "примерно" to false
                 else -> null to false
             }
             if (sub != null) Text(sub, color = if (warn) Warn else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+            // protein | fat | carbs, each in the colour of its bar above
+            else if (k != null && e.protein != null) Text(
+                androidx.compose.ui.text.buildAnnotatedString {
+                    val dim = androidx.compose.ui.text.SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    listOf(e.protein to ProteinColor, (e.fat ?: 0.0) to FatColor, (e.carbs ?: 0.0) to CarbsColor).forEachIndexed { i, (v, c) ->
+                        if (i > 0) withStyle(dim) { append(" | ") }
+                        withStyle(androidx.compose.ui.text.SpanStyle(color = c)) { append(v.toInt().toString()) }
+                    }
+                    if (e.estimated) withStyle(dim) { append(" · примерно") }
+                },
+                fontSize = 12.sp,
+            )
         }
         Spacer(Modifier.width(8.dp))
         if (k == null && e.status != EntryStatus.FAILED && !waiting) {
