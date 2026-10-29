@@ -33,7 +33,11 @@ shot d2b_voice
 adb shell input keyevent 4; sleep 2
 tap_text "Сфотографировать еду"; sleep 4
 shot d2c_camera
-adb shell input keyevent 4; sleep 2
+# take the picture with the emulator's camera and accept it: the entry with its thumbnail should appear
+adb shell input tap 540 2180; sleep 4
+shot d2d_camera_taken
+tap_text "Done" || tap_text "OK"; sleep 4
+shot d2e_photo_entry
 tap_text "Что съели"; sleep 3
 adb shell input text "grechka%s300%sg"; sleep 2
 shot d3_typing_keyboard
