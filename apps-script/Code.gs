@@ -90,7 +90,7 @@ function selfTest() {
 function testImage() {
   var pc = pc_();
   var url = 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Good_Food_Display_-_NCI_Visuals_Online.jpg/640px-Good_Food_Display_-_NCI_Visuals_Online.jpg';
-  var img = Utilities.base64Encode(UrlFetchApp.fetch(url).getBlob().getBytes());
+  var img = Utilities.base64Encode(UrlFetchApp.fetch(url, { headers: { 'User-Agent': 'CalCalc-test/1.0 (https://github.com/Pion2eer/CalCalc)' } }).getBlob().getBytes());
   var t0 = Date.now();
   var a = askPc_(pc, 'Еда на фото', img);
   log_('test', '', '[фото] ' + (a.ok ? a.title + ', ' + a.kcal + ' ккал' + (a.question ? ', вопрос: ' + a.question : '') : 'ошибка: ' + a.error), Date.now() - t0);
