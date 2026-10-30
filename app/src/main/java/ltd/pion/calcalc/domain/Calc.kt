@@ -1,25 +1,78 @@
 package ltd.pion.calcalc.domain
 
+import ltd.pion.calcalc.data.Health
 import ltd.pion.calcalc.data.Profile
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
+/** Daily grams of protein, fat and carbs. */
+data class Macros(val protein: Int, val fat: Int, val carbs: Int) {
+    /** Shares of the calories, to spread a day's budget (norm plus workouts) the same way. */
+    fun shares(): Triple<Double, Double, Double> {
+        val total = (protein * 4 + fat * 9 + carbs * 4).toDouble().coerceAtLeast(1.0)
+        return Triple(protein * 4 / total, fat * 9 / total, carbs * 4 / total)
+    }
+}
+
 object Norm {
+    /** Everyday movement without workouts: sitting, on the feet, physical work. Workouts are added per day. */
+    private val activityFactor = listOf(1.2, 1.375, 1.55)
+
     /**
-     * Mifflin–St Jeor basal rate × 1.2 everyday activity, shifted by the goal. Workouts are added per day, not here.
+     * Mifflin–St Jeor basal rate × everyday activity, shifted by the goal. Workouts are added per day, not here.
      * To lose weight it takes away 20 % but at most 500 kcal, and never goes below 1200 kcal for women and 1500 for
-     * men: a smaller, older person would otherwise get a norm too low to be safe.
+     * men: a smaller, older person would otherwise get a norm too low to be safe. Pregnancy and breastfeeding add
+     * 300 and 500 kcal and never cut.
      */
     fun daily(profile: Profile, weightKg: Double, today: LocalDate = LocalDate.now()): Int {
         val age = today.year - profile.birthYear
         val bmr = 10 * weightKg + 6.25 * profile.heightCm - 5 * age + if (profile.male) 5 else -161
-        val tdee = bmr * 1.2
-        val norm = when (profile.goal) {
-            -1 -> tdee - minOf(500.0, tdee * 0.2)
-            1 -> tdee + 300
+        val tdee = bmr * activityFactor[profile.activity.coerceIn(0, 2)]
+        val pregnant = !profile.male && profile.pregnancy > 0
+        val norm = when {
+            pregnant -> tdee + if (profile.pregnancy == 1) 300 else 500
+            profile.goal == -1 -> tdee - minOf(500.0, tdee * 0.2)
+            profile.goal == 1 -> tdee + 300
             else -> tdee
         }
         return norm.roundToInt().coerceAtLeast(if (profile.male) 1500 else 1200)
+    }
+
+    /**
+     * Protein by body weight, fat as a share of calories, carbs take the rest. Strength training and losing weight
+     * need more protein (1.4–1.7 g/kg), kidney disease less (0.8 g/kg), gout no more than 1 g/kg. Diabetes and
+     * «fewer carbs» cap the carbs, the calories left go to fat; high cholesterol lowers the fat share.
+     */
+    fun macros(profile: Profile, weightKg: Double, kcal: Int): Macros {
+        val h = profile.health
+        val pregnant = !profile.male && profile.pregnancy > 0
+        var perKg = when {
+            profile.training == 1 || profile.training == 3 -> 1.7
+            profile.goal == -1 -> 1.4
+            profile.training == 2 -> 1.3
+            else -> 1.0
+        }
+        if (profile.diet == 2) perKg += 0.3
+        if (pregnant) perKg = maxOf(perKg, 1.2)
+        if (Health.GOUT in h) perKg = minOf(perKg, 1.0)
+        if (Health.KIDNEYS in h) perKg = minOf(perKg, 0.8)
+        val proteinKcal = minOf(perKg.coerceAtMost(2.0) * weightKg * 4, kcal * 0.35)
+        var fatShare = when {
+            Health.CHOLESTEROL in h -> 0.25
+            profile.training == 2 -> 0.25
+            else -> 0.30
+        }
+        val carbCap = when {
+            profile.diet == 1 -> 0.25
+            Health.DIABETES1 in h || Health.DIABETES2 in h -> 0.40
+            else -> 1.0
+        }
+        var carbsKcal = kcal - proteinKcal - kcal * fatShare
+        if (carbsKcal > kcal * carbCap) carbsKcal = kcal * carbCap
+        // carbs never fall below 15 %: the fat gives way first
+        carbsKcal = maxOf(carbsKcal, kcal * 0.15)
+        val fatKcal = (kcal - proteinKcal - carbsKcal).coerceAtLeast(0.0)
+        return Macros((proteinKcal / 4).roundToInt(), (fatKcal / 9).roundToInt(), (carbsKcal / 4).roundToInt())
     }
 }
 

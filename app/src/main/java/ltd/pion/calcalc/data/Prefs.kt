@@ -13,7 +13,27 @@ data class Profile(
     val heightCm: Int = 175,
     /** -1 lose, 0 keep, 1 gain */
     val goal: Int = 0,
+    // the questionnaire «Уточнить норму КБЖУ»; until it is answered the norm is the plain one
+    /** An ordinary day without workouts: 0 sitting, 1 on the feet, 2 physical work. */
+    val activity: Int = 0,
+    /** 0 none or rarely, 1 strength, 2 cardio and games, 3 both. */
+    val training: Int = 0,
+    /** Conditions that change the macros: [Health] keys. */
+    val health: Set<String> = emptySet(),
+    /** 0 no, 1 pregnant, 2 breastfeeding. */
+    val pregnancy: Int = 0,
+    /** 0 usual, 1 fewer carbs, 2 more protein. */
+    val diet: Int = 0,
+    val surveyDone: Boolean = false,
 )
+
+object Health {
+    const val DIABETES2 = "diabetes2"
+    const val DIABETES1 = "diabetes1"
+    const val KIDNEYS = "kidneys"
+    const val CHOLESTEROL = "cholesterol"
+    const val GOUT = "gout"
+}
 
 
 class Prefs(context: Context) {
@@ -25,12 +45,24 @@ class Prefs(context: Context) {
             birthYear = sp.getInt("birthYear", 1990),
             heightCm = sp.getInt("heightCm", 175),
             goal = sp.getInt("goal", 0),
+            activity = sp.getInt("activity", 0),
+            training = sp.getInt("training", 0),
+            health = sp.getStringSet("health", emptySet())!!.toSet(),
+            pregnancy = sp.getInt("pregnancy", 0),
+            diet = sp.getInt("diet", 0),
+            surveyDone = sp.getBoolean("surveyDone", false),
         )
         set(p) = sp.edit()
             .putBoolean("male", p.male)
             .putInt("birthYear", p.birthYear)
             .putInt("heightCm", p.heightCm)
             .putInt("goal", p.goal)
+            .putInt("activity", p.activity)
+            .putInt("training", p.training)
+            .putStringSet("health", p.health)
+            .putInt("pregnancy", p.pregnancy)
+            .putInt("diet", p.diet)
+            .putBoolean("surveyDone", p.surveyDone)
             .apply()
 
     /** Address of the shared AI script; empty means the one built into the app. */

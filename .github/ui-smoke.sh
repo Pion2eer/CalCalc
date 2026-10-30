@@ -135,6 +135,16 @@ tap_text "Дневник"; sleep 2
 shot d5_diary
 tap_text "Профиль"; sleep 2
 shot d6_profile
+# the questionnaire for the macros: one question a page, the norm at the end
+tap_text "Уточнить норму КБЖУ"; sleep 2
+shot d6b_survey
+tap_text "Далее"; sleep 1
+tap_text "Силовые"; sleep 1
+shot d6c_survey_training
+tap_text "Далее"; sleep 1; tap_text "Далее"; sleep 1; tap_text "Далее"; sleep 2
+shot d6d_survey_result
+tap_text "Сохранить норму"; sleep 2
+shot d6e_profile_after_survey
 adb shell input swipe 500 1600 500 500 300; sleep 1
 shot d7_profile_steps
 tap_text "Подключить шаги"; sleep 4

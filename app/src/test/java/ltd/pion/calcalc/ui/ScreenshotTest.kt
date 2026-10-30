@@ -163,6 +163,11 @@ class ScreenshotTest {
 
     @Test fun light_profile() = shot("17_dark_profile", dark = true) { profile("pion2er@gmail.com", UpdateState.UpToDate) }
 
+    private val surveyed = Profile(true, 1990, 180, -1, activity = 1, training = 1, health = setOf(ltd.pion.calcalc.data.Health.DIABETES2))
+    @Test fun survey_activity() = shot("19_survey_activity") { SurveyContent(surveyed, 82.5, {}, {}) }
+    @Test fun survey_health() = shot("20_survey_health") { SurveyContent(surveyed, 82.5, {}, {}, startStep = 2) }
+    @Test fun survey_result() = shot("21_survey_result") { SurveyContent(surveyed, 82.5, {}, {}, startStep = 4) }
+
     @Test fun history() = shot("18_history") {
         fun h(id: Long, action: String, e: Entry, at: Long) = ltd.pion.calcalc.data.History.of(action, e).copy(id = id, at = at)
         val soup = entries[2]

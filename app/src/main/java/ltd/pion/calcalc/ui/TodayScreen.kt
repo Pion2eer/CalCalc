@@ -395,12 +395,13 @@ private fun SummaryCard(s: DaySummary, entries: List<Entry>, aiBlocker: String?)
             val p = entries.sumOf { it.protein ?: 0.0 }
             val f = entries.sumOf { it.fat ?: 0.0 }
             val c = entries.sumOf { it.carbs ?: 0.0 }
-            // a usual split of the daily norm: 20% protein, 30% fat, 50% carbs
+            // the day's budget split like the norm: 20/30/50 until the questionnaire says otherwise
             val budget = s.norm + s.burned
+            val (sp, sf, sc) = s.split
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
-                Macro("Белки", p, budget * 0.20 / 4, Color(0xFF64B5F6), Modifier.weight(1f))
-                Macro("Жиры", f, budget * 0.30 / 9, Color(0xFFF06292), Modifier.weight(1f))
-                Macro("Углеводы", c, budget * 0.50 / 4, Color(0xFFFFD54F), Modifier.weight(1f))
+                Macro("Белки", p, budget * sp / 4, Color(0xFF64B5F6), Modifier.weight(1f))
+                Macro("Жиры", f, budget * sf / 9, Color(0xFFF06292), Modifier.weight(1f))
+                Macro("Углеводы", c, budget * sc / 4, Color(0xFFFFD54F), Modifier.weight(1f))
             }
             if (s.pending > 0) Row(
                 Modifier.fillMaxWidth().padding(top = 14.dp),

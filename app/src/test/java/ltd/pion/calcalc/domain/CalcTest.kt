@@ -1,5 +1,6 @@
 package ltd.pion.calcalc.domain
 
+import ltd.pion.calcalc.data.Health
 import ltd.pion.calcalc.data.Profile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -51,5 +52,23 @@ class CalcTest {
         val p = Profile(male = false, birthYear = 1976, heightCm = 160, goal = -1)
         // 10*60 + 6.25*160 - 5*50 - 161 = 1189; ×1.2 = 1427; −20 % = 1141, raised to the 1200 floor
         assertEquals(1200, Norm.daily(p, 60.0, LocalDate.of(2026, 10, 28)))
+    }
+
+    @Test fun plainMacrosAreAUsualSplit() {
+        val m = Norm.macros(Profile(), 80.0, 2100)
+        // 1 g/kg protein = 80 g, 30 % fat = 70 g, the rest carbs = 288 g
+        assertEquals(Macros(80, 70, 288), m)
+    }
+
+    @Test fun kidneysLimitProteinAndDiabetesCapsCarbs() {
+        val m = Norm.macros(Profile(training = 1, health = setOf(Health.KIDNEYS, Health.DIABETES2)), 80.0, 2000)
+        assertEquals(64, m.protein)
+        assertEquals(200, m.carbs)
+        assertTrue(kotlin.math.abs(2000 - (m.protein * 4 + m.fat * 9 + m.carbs * 4)) <= 10)
+    }
+
+    @Test fun activityRaisesTheNorm() {
+        val p = Profile(male = true, birthYear = 1990, heightCm = 180, goal = 0, activity = 1)
+        assertEquals(2406, Norm.daily(p, 80.0, LocalDate.of(2026, 10, 28)))
     }
 }

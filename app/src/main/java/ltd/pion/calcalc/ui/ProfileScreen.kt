@@ -49,11 +49,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ltd.pion.calcalc.BuildConfig
 import ltd.pion.calcalc.data.Profile
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import ltd.pion.calcalc.domain.Norm
 import ltd.pion.calcalc.update.UpdateState
 
 @Composable
-fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit, onOpenLog: () -> Unit = {}) {
+fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit, onOpenLog: () -> Unit = {}, onOpenSurvey: () -> Unit = {}) {
     val p0 by vm.profile.collectAsState()
     val w0 by vm.weight.collectAsState()
     val update by vm.update.collectAsState()
@@ -82,7 +86,7 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit, onO
         onAiUrl = { vm.prefs.aiUrl = it }, onAutoDownload = { vm.prefs.autoDownloadOnWifi = it },
         onCheckUpdate = { vm.checkUpdate() }, onUpdate = vm::downloadAndInstall, modifier = modifier,
         steps = steps, stepCount = stepCount, sync = sync,
-        theme = theme, onTheme = { vm.prefs.theme = it }, onOpenLog = onOpenLog,
+        theme = theme, onTheme = { vm.prefs.theme = it }, onOpenLog = onOpenLog, onOpenSurvey = onOpenSurvey,
         onSteps = {
             if (steps == StepsState.NEEDS_INSTALL) ctx.startActivity(
                 Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${Steps.PROVIDER}&url=healthconnect%3A%2F%2Fonboarding"))
@@ -119,6 +123,7 @@ fun ProfileContent(
     theme: String = "light",
     onTheme: (String) -> Unit = {},
     onOpenLog: () -> Unit = {},
+    onOpenSurvey: () -> Unit = {},
 ) {
     var male by remember(p0) { mutableStateOf(p0.male) }
     var year by remember(p0) { mutableStateOf(p0.birthYear.toString()) }
@@ -129,7 +134,7 @@ fun ProfileContent(
     var autoDl by remember { mutableStateOf(autoDownload) }
     var advanced by remember { mutableStateOf(false) }
 
-    val draft = Profile(male, year.toIntOrNull() ?: p0.birthYear, height.toIntOrNull() ?: p0.heightCm, goal)
+    val draft = p0.copy(male = male, birthYear = year.toIntOrNull() ?: p0.birthYear, heightCm = height.toIntOrNull() ?: p0.heightCm, goal = goal)
     val kg = weight.replace(',', '.').toDoubleOrNull()
     val changed = draft != p0 || (kg != null && kg != w0)
 
@@ -161,10 +166,29 @@ fun ProfileContent(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text("Ваша норма", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("${Norm.daily(draft, kg ?: w0)} ккал в день", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Accent)
+                    val norm = Norm.daily(draft, kg ?: w0)
+                    val m = Norm.macros(draft, kg ?: w0, norm)
+                    Text("$norm ккал в день", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Accent)
+                    Text(
+                        buildAnnotatedString {
+                            withStyle(SpanStyle(color = Color(0xFF42A5F5), fontWeight = FontWeight.SemiBold)) { append("Б ${m.protein} г") }
+                            append("  ·  ")
+                            withStyle(SpanStyle(color = Color(0xFFEC407A), fontWeight = FontWeight.SemiBold)) { append("Ж ${m.fat} г") }
+                            append("  ·  ")
+                            withStyle(SpanStyle(color = Color(0xFFF9A825), fontWeight = FontWeight.SemiBold)) { append("У ${m.carbs} г") }
+                        },
+                        fontSize = 14.sp, modifier = Modifier.padding(vertical = 2.dp),
+                    )
                     Text("Тренировки добавляются к ней", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            OutlinedButton(onOpenSurvey, Modifier.fillMaxWidth().height(48.dp)) {
+                Text(if (p0.surveyDone) "Изменить ответы о КБЖУ" else "Уточнить норму КБЖУ")
+            }
+            Text(
+                "Ответьте на пару вопросов (активность, тренировки, здоровье), чтобы точнее знать вашу норму белков, жиров и углеводов.",
+                fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Button({ onSave(draft, kg) }, Modifier.fillMaxWidth().height(48.dp), enabled = changed) {
                 Text(if (changed) "Сохранить" else "Сохранено")
             }
