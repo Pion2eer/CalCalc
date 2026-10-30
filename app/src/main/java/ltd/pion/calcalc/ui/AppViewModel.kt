@@ -304,6 +304,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         SyncWorker.enqueue(getApplication())
     }
 
+    /** The entry form: a new name, calories and, when the weight changed, macros and products scaled to it. */
+    fun saveEdit(entry: Entry, title: String, kcal: Int, grams: Int?) = viewModelScope.launch {
+        val old = entry.items?.let { runCatching { org.json.JSONArray(it) }.getOrNull() }
+        val base = old?.let { a -> (0 until a.length()).sumOf { a.getJSONObject(it).optInt("grams") } } ?: 0
+        val f = if (grams != null && base > 0) grams.toDouble() / base else 1.0
+        fun Double?.scaled() = this?.let { Math.round(it * f * 10) / 10.0 }
+        val items = if (f == 1.0 || old == null) entry.items else org.json.JSONArray().also { out ->
+            for (i in 0 until old.length()) {
+                val o = org.json.JSONObject(old.getJSONObject(i).toString())
+                o.put("grams", Math.round(o.optInt("grams") * f).toInt())
+                o.put("kcal", Math.round(o.optInt("kcal") * f).toInt())
+                out.put(o)
+            }
+        }.toString()
+        val sameKcal = kcal == entry.kcal
+        save(
+            entry.copy(
+                title = title, kcal = kcal, items = items,
+                protein = entry.protein.scaled(), fat = entry.fat.scaled(), carbs = entry.carbs.scaled(),
+                estimated = sameKcal && entry.estimated, status = EntryStatus.DONE,
+                editedByUser = entry.editedByUser || !sameKcal || f != 1.0,
+                synced = false, updatedAt = System.currentTimeMillis(),
+            ),
+            HistoryAction.EDIT,
+        )
+        SyncWorker.enqueue(getApplication())
+    }
+
     /** The photo file stays a month after deletion, so the entry can still be restored from the log. */
     fun delete(entry: Entry) = viewModelScope.launch {
         db.entries().delete(entry.id)

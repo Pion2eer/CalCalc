@@ -87,6 +87,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.Image
 import ltd.pion.calcalc.sync.Photos
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.produceState
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.core.content.FileProvider
 import androidx.compose.ui.platform.LocalContext
@@ -183,7 +186,7 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
     editing?.let { e ->
         EntryDialog(
             e, onDismiss = { editing = null },
-            onSave = { vm.setKcal(e, it); editing = null },
+            onSave = { t, k, g -> vm.saveEdit(e, t, k, g); editing = null },
             onRewrite = { vm.rewrite(e, it); editing = null },
             onDelete = { vm.delete(e); editing = null },
             favorite = favs.any { it.title == e.title }, onFavorite = { vm.toggleFavorite(e) },
@@ -755,30 +758,54 @@ private fun parseOptions(json: String?): List<String> = try {
 
 @Composable
 fun EntryDialog(
-    e: Entry, onDismiss: () -> Unit, onSave: (Int) -> Unit, onRewrite: (String) -> Unit, onDelete: () -> Unit,
+    e: Entry, onDismiss: () -> Unit, onSave: (title: String, kcal: Int, grams: Int?) -> Unit, onRewrite: (String) -> Unit, onDelete: () -> Unit,
     favorite: Boolean = false, onFavorite: () -> Unit = {},
 ) {
     val burn = (e.kcal ?: 0) < 0 || e.type == EntryType.ACTIVITY
+    val food = e.type == EntryType.FOOD
+    val parts = remember(e.items) { itemsOf(e.items) }
+    // the weight the AI counted: a new weight scales the calories without asking it again
+    val baseGrams = parts.sumOf { it.second }.takeIf { it > 0 }
+    var name by remember { mutableStateOf(e.title) }
     var record by remember { mutableStateOf(e.rawText) }
+    var grams by remember { mutableStateOf(baseGrams?.toString() ?: "") }
     var text by remember { mutableStateOf(e.kcal?.let { kotlin.math.abs(it).toString() } ?: "") }
     // a new description means new calories: they are counted again from the text, the number field waits
-    val rewritten = record.trim() != e.rawText.trim()
+    val newGrams = grams.toIntOrNull()?.takeIf { it > 0 }
+    val askWeight = food && baseGrams == null && newGrams != null
+    val rewritten = record.trim() != e.rawText.trim() || askWeight
+    val photo by produceState<android.graphics.Bitmap?>(null, e.photo) {
+        value = e.photo?.let { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Photos.thumbnail(it, 640) } }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(e.title, Modifier.weight(1f))
-                // counted food can be starred, to add it again from the quick buttons
-                if ((e.kcal ?: 0) > 0) IconButton(onFavorite) {
-                    Icon(
-                        if (favorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                        if (favorite) "Убрать из избранного" else "В избранное", tint = if (favorite) Accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                photo?.let {
+                    Image(
+                        it.asImageBitmap(), "Фото еды",
+                        Modifier.fillMaxWidth().heightIn(max = 200.dp).clip(RoundedCornerShape(16.dp)),
+                        contentScale = ContentScale.Crop,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        name, { name = it.take(100) },
+                        label = { Text("Название") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                    )
+                    // counted food can be starred, to add it again from the quick buttons
+                    if ((e.kcal ?: 0) > 0) IconButton(onFavorite) {
+                        Icon(
+                            if (favorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                            if (favorite) "Убрать из избранного" else "В избранное", tint = if (favorite) Accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     record, { record = it.take(500) },
                     label = { Text(if (burn) "Тренировка" else "Что съели") },
@@ -786,28 +813,49 @@ fun EntryDialog(
                     maxLines = 4,
                 )
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    text, { v -> text = v.filter { it.isDigit() }.take(5) },
-                    label = { Text(if (burn) "Сожжено, ккал" else "Калории") },
-                    supportingText = if (rewritten) ({ Text("Пересчитаю по новому тексту") }) else null,
-                    enabled = !rewritten,
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                Row {
+                    if (food) {
+                        OutlinedTextField(
+                            grams,
+                            { v ->
+                                grams = v.filter { it.isDigit() }.take(5)
+                                val g = grams.toIntOrNull()
+                                val k = e.kcal
+                                if (baseGrams != null && g != null && g > 0 && k != null) text = Math.round(k.toDouble() * g / baseGrams).toString()
+                            },
+                            label = { Text("Вес, г") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    OutlinedTextField(
+                        text, { v -> text = v.filter { it.isDigit() }.take(5) },
+                        label = { Text(if (burn) "Сожжено, ккал" else "Калории") },
+                        enabled = !rewritten,
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                }
+                if (rewritten) Text(
+                    if (askWeight && record.trim() == e.rawText.trim()) "ИИ пересчитает с этим весом" else "Пересчитаю по новому тексту",
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp),
                 )
                 // what the AI counted, product by product: a wrong guess is easy to spot here
-                val parts = remember(e.items) { itemsOf(e.items) }
                 if (parts.isNotEmpty() && !rewritten) {
-                    Text("Из чего посчитано", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
-                    parts.forEach { (name, grams, kcal) ->
+                    val f = if (baseGrams != null && newGrams != null) newGrams.toDouble() / baseGrams else 1.0
+                    Text("Из чего посчитано", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                    parts.forEach { (n, g, k) ->
                         Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
-                            Text("$name, $grams г", Modifier.weight(1f), fontSize = 14.sp)
-                            Text("$kcal ккал", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("$n, ${Math.round(g * f)} г", Modifier.weight(1f), fontSize = 14.sp)
+                            Text("${Math.round(k * f)} ккал", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
                 Row(Modifier.padding(top = 8.dp)) {
-                    if (e.type == EntryType.FOOD && !rewritten) TextButton({ onRewrite(record) }) { Text("Пересчитать ИИ") }
+                    if (food && !rewritten) TextButton({ onRewrite(record) }) { Text("Пересчитать ИИ") }
                     Spacer(Modifier.weight(1f))
                     TextButton(onDelete) { Text("Удалить", color = Over) }
                 }
@@ -816,8 +864,8 @@ fun EntryDialog(
         confirmButton = {
             TextButton(
                 {
-                    if (rewritten) onRewrite(record)
-                    else text.toIntOrNull()?.let { onSave(if (burn) -it else it) }
+                    if (rewritten) onRewrite(if (askWeight) "${record.trim()}, $newGrams г" else record)
+                    else text.toIntOrNull()?.let { onSave(name.trim().ifBlank { e.title }, if (burn) -it else it, newGrams.takeIf { baseGrams != null && it != baseGrams }) }
                 },
                 enabled = if (rewritten) record.isNotBlank() else text.isNotEmpty(),
             ) { Text(if (rewritten) "Пересчитать" else "Сохранить") }
