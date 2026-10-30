@@ -164,7 +164,7 @@ function caller_(accessToken) {
 /**
  * Who may use the AI. The CalCalc OAuth client is in testing mode, so only the test users added in the Google Cloud
  * console can get a token from it at all: a token issued to that client is enough, no second list to keep. The
- * client is learned from the owner's own app the first time the owner calls. ALLOWED still adds e-mails by hand.
+ * client is learned from the first call of the owner or of someone in ALLOWED. ALLOWED still adds e-mails by hand.
  */
 function allowed_(who) {
   var props = PropertiesService.getScriptProperties();
@@ -177,7 +177,12 @@ function allowed_(who) {
   if (app && who.app === app) return true;
   var list = String(props.getProperty('ALLOWED') || '')
     .toLowerCase().split(',').map(function (s) { return s.trim(); }).filter(String);
-  return list.indexOf('*') >= 0 || list.indexOf(who.email) >= 0;
+  // someone listed by hand uses the same app, so their token teaches the client too, without waiting for the owner
+  if (list.indexOf(who.email) >= 0) {
+    if (!app && who.app) props.setProperty('APP_CLIENT', who.app);
+    return true;
+  }
+  return list.indexOf('*') >= 0;
 }
 
 // A small model is bad at multiplying in its head: it gives grams and kcal per 100 g for each item, the script does the sums
