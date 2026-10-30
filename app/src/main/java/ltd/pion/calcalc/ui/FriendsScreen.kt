@@ -240,7 +240,8 @@ fun FriendContent(
 private fun FoodCard(f: FriendFood, onClick: () -> Unit) {
     Surface(
         onClick, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant, shadowElevation = CardShadow,
+        shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = CardShadow,
     ) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
