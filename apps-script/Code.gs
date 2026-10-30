@@ -1,7 +1,8 @@
 /**
  * CalCalc shared AI script. Deploy as a web app: Execute as "Me", access "Anyone".
  * Nothing to configure: the script owner may use the AI; other e-mails go in the optional script property
- *   ALLOWED — comma-separated e-mails ("*" = anyone signed in with Google).
+ *   ALLOWED — extra comma-separated e-mails ("*" = anyone signed in with Google). Not needed for test users of the
+ *   app's OAuth client: their tokens are let in (APP_CLIENT, learned from the owner's app).
  * The PC registers itself every 4 minutes: POST ?action=localReg {url, token, model, paused}. The first
  * registration pins the PC's proxy token; after that only the same token may move the address
  * (to change PCs, delete the PC_TOKEN property).
@@ -109,7 +110,8 @@ function testAi() {
 }
 
 function clientLog_(b) {
-  var email = caller_(b.accessToken) || '?';
+  var who = caller_(b.accessToken);
+  var email = who ? who.email : '?';
   log_('app', email, b.message);
   return { ok: true };
 }
@@ -141,26 +143,41 @@ function pc_() {
 // the PC re-registers every 4 minutes; older than 10 means it is off
 function fresh_(pc) { return Date.now() - pc.at < 10 * 60 * 1000; }
 
-/** Who is calling: the Google access token from the app, checked with Google itself. */
+/**
+ * Who is calling: the Google access token from the app, checked with Google itself. Returns {email, app}, where app is
+ * the OAuth client the token was issued to (the CalCalc Android app for real users).
+ */
 function caller_(accessToken) {
   if (!accessToken) return null;
   var cache = CacheService.getScriptCache();
-  var hit = cache.get('t:' + accessToken.slice(-40));
-  if (hit) return hit;
+  var hit = cache.get('u:' + accessToken.slice(-40));
+  if (hit) return JSON.parse(hit);
   var r = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(accessToken), { muteHttpExceptions: true });
   if (r.getResponseCode() !== 200) return null;
   var info = JSON.parse(r.getContentText());
   if (!info.email || String(info.email_verified) !== 'true') return null;
-  var email = String(info.email).toLowerCase();
-  cache.put('t:' + accessToken.slice(-40), email, 600);
-  return email;
+  var who = { email: String(info.email).toLowerCase(), app: String(info.azp || info.aud || '') };
+  cache.put('u:' + accessToken.slice(-40), JSON.stringify(who), 600);
+  return who;
 }
 
-function allowed_(email) {
-  var list = String(PropertiesService.getScriptProperties().getProperty('ALLOWED') || '')
-    .toLowerCase().split(',').map(function (s) { return s.trim(); }).filter(String);
+/**
+ * Who may use the AI. The CalCalc OAuth client is in testing mode, so only the test users added in the Google Cloud
+ * console can get a token from it at all: a token issued to that client is enough, no second list to keep. The
+ * client is learned from the owner's own app the first time the owner calls. ALLOWED still adds e-mails by hand.
+ */
+function allowed_(who) {
+  var props = PropertiesService.getScriptProperties();
   var owner = String(Session.getEffectiveUser().getEmail() || '').toLowerCase();
-  return email === owner || list.indexOf('*') >= 0 || list.indexOf(email) >= 0;
+  if (who.email === owner) {
+    if (who.app && props.getProperty('APP_CLIENT') !== who.app) props.setProperty('APP_CLIENT', who.app);
+    return true;
+  }
+  var app = props.getProperty('APP_CLIENT');
+  if (app && who.app === app) return true;
+  var list = String(props.getProperty('ALLOWED') || '')
+    .toLowerCase().split(',').map(function (s) { return s.trim(); }).filter(String);
+  return list.indexOf('*') >= 0 || list.indexOf(who.email) >= 0;
 }
 
 // A small model is bad at multiplying in its head: it gives grams and kcal per 100 g for each item, the script does the sums
@@ -176,12 +193,13 @@ var PROMPT =
   '"protein100":число,"fat100":число,"carbs100":число}],"question":"вопрос или пустая строка","options":["вариант",...]}';
 
 function parse_(b) {
-  var email = caller_(b.accessToken);
-  if (!email) {
+  var who = caller_(b.accessToken);
+  if (!who) {
     log_('parse', '?', 'токен Google не прошёл проверку');
     return { ok: false, error: 'Войдите через Google заново' };
   }
-  if (!allowed_(email)) {
+  var email = who.email;
+  if (!allowed_(who)) {
     log_('parse', email, 'нет в списке ALLOWED');
     return { ok: false, error: 'Нет доступа к ИИ для ' + email };
   }
