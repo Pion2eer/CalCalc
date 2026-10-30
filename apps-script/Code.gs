@@ -339,9 +339,12 @@ function seen_(email) {
   } catch (x) {}
 }
 
+/** Seen by the friends book, or at least in the AI journal (people who used the app before friends existed). */
 function known_(email) {
   var rows = socialBook_().getSheetByName('users').getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) if (rows[i][0] === email) return true;
+  var log = logSheet_().getDataRange().getValues();
+  for (var j = 1; j < log.length; j++) if (String(log[j][2]).toLowerCase() === email) { seen_(email); return true; }
   return false;
 }
 
@@ -389,13 +392,14 @@ function socialFor_(me, b) {
         }) };
       case 'invite': {
         if (!other || other === me) return { ok: false, error: 'Введите e-mail другого человека' };
-        if (!known_(other)) return { ok: false, error: other + ' ещё не входил в CalCalc. Пусть установит приложение и войдёт через Google' };
+        // someone not seen yet still gets the invite: they find it in the profile once they open the new version
+        var unknown = !known_(other);
         var kind = b.kind === 'family' ? 'family' : 'friend';
         var l = linkOf_(me, other);
         var sh = socialBook_().getSheetByName('links');
         if (!l) {
           sh.appendRow([me, other, kind, 'pending', new Date()]);
-          log_('social', me, 'приглашение для ' + other + ' (' + kind + ')');
+          log_('social', me, 'приглашение для ' + other + ' (' + kind + ')' + (unknown ? ', ещё не входил' : ''));
         } else if (l.status === 'pending' && l.to === me) {
           // they invited me first: inviting back is the same as accepting
           sh.getRange(l.row, 4, 1, 2).setValues([['accepted', new Date()]]);
