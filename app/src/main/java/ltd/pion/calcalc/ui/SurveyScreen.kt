@@ -67,7 +67,7 @@ fun SurveyContent(
     val steps = Step.entries.filter { it != Step.PREGNANCY || !p.male }
     var i by remember { mutableIntStateOf(startStep.coerceIn(0, steps.size - 1)) }
     val step = steps[i.coerceAtMost(steps.size - 1)]
-    val back: () -> Unit = { if (i == 0) onClose() else i -= 1 }
+    val back: () -> Unit = { if (i == 0) onClose() else { i -= 1 } }
     BackHandler(onBack = back)
 
     Column(modifier.fillMaxSize()) {
