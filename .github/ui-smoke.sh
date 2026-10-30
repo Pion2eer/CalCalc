@@ -79,15 +79,18 @@ shot d2d_camera_taken
 tap_text "Done" || tap_text "OK"; sleep 4
 shot d2e_photo_entry
 # the entry form shows the photo, the editable name and the weight
+# the entries sit under the quick buttons on a small screen: scroll the list up first
+no_anr; adb shell input swipe 540 1500 540 700 600; sleep 2
 tap_text "Фото еды"; sleep 2
 shot d2f_photo_dialog
-adb shell input keyevent 4; sleep 2
+tap_text "Отмена"; sleep 2
 tap_text "Что съели"; sleep 3
 no_anr; adb shell input text "grechka%s300%sg"; sleep 2
 shot d3_typing_keyboard
 adb shell input keyevent 66; sleep 3
 adb shell input keyevent 4; sleep 2
 shot d4_after_send
+no_anr; adb shell input swipe 540 1500 540 700 600; sleep 2
 tap_text "grechka"; sleep 2
 shot d4b_edit_dialog
 tap_text "Что съели"; sleep 1
