@@ -138,12 +138,14 @@ fun Root(vm: AppViewModel) {
     var tab by rememberSaveable { mutableIntStateOf(if (vm.prefs.profileDone) 0 else 2) }
     var log by rememberSaveable { mutableStateOf(false) }
     var survey by rememberSaveable { mutableStateOf(false) }
+    var friend by rememberSaveable { mutableStateOf<String?>(null) }
+    val links by vm.links.collectAsState()
     Scaffold(
         bottomBar = {
             NavigationBar {
-                NavigationBarItem(tab == 0 && !log, { tab = 0; log = false; survey = false }, { Icon(Icons.Filled.Restaurant, null) }, label = { Text("Сегодня") })
-                NavigationBarItem(tab == 1 && !log, { tab = 1; log = false; survey = false }, { Icon(Icons.Filled.TableChart, null) }, label = { Text("Дневник") })
-                NavigationBarItem(tab == 2 && !log, { tab = 2; log = false; survey = false }, { Icon(Icons.Filled.Person, null) }, label = { Text("Профиль") })
+                NavigationBarItem(tab == 0 && !log, { tab = 0; log = false; survey = false; friend = null }, { Icon(Icons.Filled.Restaurant, null) }, label = { Text("Сегодня") })
+                NavigationBarItem(tab == 1 && !log, { tab = 1; log = false; survey = false; friend = null }, { Icon(Icons.Filled.TableChart, null) }, label = { Text("Дневник") })
+                NavigationBarItem(tab == 2 && !log, { tab = 2; log = false; survey = false; friend = null }, { Icon(Icons.Filled.Person, null) }, label = { Text("Профиль") })
             }
         },
     ) { pad ->
@@ -152,9 +154,11 @@ fun Root(vm: AppViewModel) {
         when {
             log -> HistoryScreen(vm, onClose = { log = false }, m)
             survey -> SurveyScreen(vm, onClose = { survey = false }, m)
+            friend != null && links.any { it.email == friend } ->
+                FriendScreen(vm, links.first { it.email == friend }, onClose = { friend = null }, m)
             tab == 0 -> TodayScreen(vm, m)
             tab == 1 -> DiaryScreen(vm, m)
-            else -> ProfileScreen(vm, m, onSaved = { tab = 0 }, onOpenLog = { log = true }, onOpenSurvey = { survey = true })
+            else -> ProfileScreen(vm, m, onSaved = { tab = 0 }, onOpenLog = { log = true }, onOpenSurvey = { survey = true }, onOpenFriend = { friend = it.email })
         }
     }
 }

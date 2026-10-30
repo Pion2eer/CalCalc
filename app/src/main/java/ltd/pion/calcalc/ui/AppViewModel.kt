@@ -30,6 +30,10 @@ import ltd.pion.calcalc.domain.InputParser
 import ltd.pion.calcalc.domain.Norm
 import ltd.pion.calcalc.domain.Parsed
 import ltd.pion.calcalc.sync.GoogleAuth
+import ltd.pion.calcalc.sync.FriendFood
+import ltd.pion.calcalc.sync.Link
+import ltd.pion.calcalc.sync.Social
+import ltd.pion.calcalc.sync.SocialError
 import ltd.pion.calcalc.sync.Photos
 import ltd.pion.calcalc.sync.Sheets
 import ltd.pion.calcalc.sync.Steps
@@ -408,6 +412,92 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun answer(entry: Entry, option: String) = viewModelScope.launch {
         db.entries().update(
             entry.copy(status = EntryStatus.QUEUED, answer = option, updatedAt = System.currentTimeMillis())
+        )
+        SyncWorker.enqueue(getApplication())
+    }
+
+    // ---- friends and family ----
+
+    private val _links = MutableStateFlow<List<Link>>(emptyList())
+    val links: StateFlow<List<Link>> = _links.asStateFlow()
+    private val _socialError = MutableStateFlow<String?>(null)
+    val socialError: StateFlow<String?> = _socialError.asStateFlow()
+    private val _socialBusy = MutableStateFlow(false)
+    val socialBusy: StateFlow<Boolean> = _socialBusy.asStateFlow()
+
+    /** Runs one call to the script with a fresh token, then reloads the list; errors go under the section. */
+    private fun social(block: suspend (url: String, token: String) -> Unit) = viewModelScope.launch {
+        if (prefs.accountEmail == null) { _socialError.value = "Сначала войдите через Google"; return@launch }
+        _socialBusy.value = true
+        try {
+            val token = GoogleAuth.silentToken(getApplication()) ?: throw SocialError("Google просит войти заново")
+            block(prefs.aiUrl, token)
+            val list = Social.list(prefs.aiUrl, token)
+            _links.value = list
+            val share = list.any { it.accepted }
+            if (share && !prefs.shareFood) {
+                // the first accepted link: send the food now, so the friend sees it right away
+                prefs.lastSocialPush = 0
+                prefs.shareFood = true
+                SyncWorker.enqueue(getApplication())
+            } else if (!share) prefs.shareFood = false
+            _socialError.value = null
+        } catch (e: SocialError) {
+            _socialError.value = e.message
+        } catch (e: Exception) {
+            _socialError.value = "Нет связи, попробуйте позже"
+        } finally {
+            _socialBusy.value = false
+        }
+    }
+
+    fun refreshFriends() = social { _, _ -> }
+    fun invite(email: String, family: Boolean) = social { u, t -> Social.invite(u, t, email, family) }
+    fun answerInvite(email: String, accept: Boolean) = social { u, t -> Social.answer(u, t, email, accept) }
+    fun removeFriend(email: String) = social { u, t -> Social.remove(u, t, email) }
+
+    private val _feed = MutableStateFlow<List<FriendFood>?>(null)
+    /** The open friend's food; null while it loads. */
+    val feed: StateFlow<List<FriendFood>?> = _feed.asStateFlow()
+    private val _feedError = MutableStateFlow<String?>(null)
+    val feedError: StateFlow<String?> = _feedError.asStateFlow()
+
+    fun loadFeed(email: String) = viewModelScope.launch {
+        _feed.value = null
+        _feedError.value = null
+        try {
+            val token = GoogleAuth.silentToken(getApplication()) ?: throw SocialError("Google просит войти заново")
+            _feed.value = Social.feed(prefs.aiUrl, token, email)
+        } catch (e: SocialError) {
+            _feedError.value = e.message
+            _feed.value = emptyList()
+        } catch (e: Exception) {
+            _feedError.value = "Нет связи, попробуйте позже"
+            _feed.value = emptyList()
+        }
+    }
+
+    /** A friend's dish into my today, scaled to my portion: counted already, no AI needed. */
+    fun copyFood(f: FriendFood, factor: Double) = viewModelScope.launch {
+        fun scale(v: Double?) = v?.let { Math.round(it * factor * 10) / 10.0 }
+        val items = f.items?.let { json ->
+            runCatching {
+                val a = org.json.JSONArray(json)
+                for (i in 0 until a.length()) a.getJSONObject(i).let { o ->
+                    o.put("grams", Math.round(o.optInt("grams") * factor).toInt())
+                    o.put("kcal", Math.round(o.optInt("kcal") * factor).toInt())
+                }
+                a.toString()
+            }.getOrNull()
+        }
+        val title = if (factor == 1.0) f.title else f.title + " ×" + (if (factor % 1.0 == 0.0) factor.toInt().toString() else "%.2f".format(java.util.Locale.US, factor).trimEnd('0').trimEnd('.').replace('.', ','))
+        save(
+            Entry(
+                type = EntryType.FOOD, rawText = f.title, title = title, kcal = Math.round(f.kcal * factor).toInt(),
+                protein = scale(f.protein), fat = scale(f.fat), carbs = scale(f.carbs), items = items,
+                status = EntryStatus.DONE, day = LocalDate.now().toString(),
+            ),
+            HistoryAction.ADD,
         )
         SyncWorker.enqueue(getApplication())
     }

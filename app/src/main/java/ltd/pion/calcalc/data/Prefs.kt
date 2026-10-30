@@ -103,6 +103,15 @@ class Prefs(context: Context) {
         get() = sp.getString("theme", "light") ?: "light"
         set(v) = sp.edit().putString("theme", v).apply()
 
+    /** Someone accepted a link: the food goes to the shared script after each sync. */
+    var shareFood: Boolean
+        get() = sp.getBoolean("shareFood", false)
+        set(v) = sp.edit().putBoolean("shareFood", v).apply()
+
+    var lastSocialPush: Long
+        get() = sp.getLong("lastSocialPush", 0)
+        set(v) = sp.edit().putLong("lastSocialPush", v).apply()
+
     var profileDone: Boolean
         get() = sp.getBoolean("profileDone", false)
         set(v) = sp.edit().putBoolean("profileDone", v).apply()

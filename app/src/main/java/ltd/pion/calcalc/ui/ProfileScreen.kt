@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ltd.pion.calcalc.BuildConfig
 import ltd.pion.calcalc.data.Profile
+import ltd.pion.calcalc.sync.Link
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -57,7 +58,7 @@ import ltd.pion.calcalc.domain.Norm
 import ltd.pion.calcalc.update.UpdateState
 
 @Composable
-fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit, onOpenLog: () -> Unit = {}, onOpenSurvey: () -> Unit = {}) {
+fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit, onOpenLog: () -> Unit = {}, onOpenSurvey: () -> Unit = {}, onOpenFriend: (Link) -> Unit = {}) {
     val p0 by vm.profile.collectAsState()
     val w0 by vm.weight.collectAsState()
     val update by vm.update.collectAsState()
@@ -72,6 +73,10 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit, onO
         vm.refreshSteps()
     }
     LaunchedEffect(Unit) { vm.refreshSteps() }
+    val links by vm.links.collectAsState()
+    val socialBusy by vm.socialBusy.collectAsState()
+    val socialError by vm.socialError.collectAsState()
+    LaunchedEffect(account) { if (account != null) vm.refreshFriends() }
     val signInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
         vm.onSignInResult(it.data)
     }
@@ -87,6 +92,8 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit, onO
         onCheckUpdate = { vm.checkUpdate() }, onUpdate = vm::downloadAndInstall, modifier = modifier,
         steps = steps, stepCount = stepCount, sync = sync,
         theme = theme, onTheme = { vm.prefs.theme = it }, onOpenLog = onOpenLog, onOpenSurvey = onOpenSurvey,
+        links = links, socialBusy = socialBusy, socialError = socialError, onInvite = vm::invite,
+        onAnswer = vm::answerInvite, onOpenFriend = onOpenFriend,
         onSteps = {
             if (steps == StepsState.NEEDS_INSTALL) ctx.startActivity(
                 Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${Steps.PROVIDER}&url=healthconnect%3A%2F%2Fonboarding"))
@@ -124,6 +131,12 @@ fun ProfileContent(
     onTheme: (String) -> Unit = {},
     onOpenLog: () -> Unit = {},
     onOpenSurvey: () -> Unit = {},
+    links: List<Link> = emptyList(),
+    socialBusy: Boolean = false,
+    socialError: String? = null,
+    onInvite: (String, Boolean) -> Unit = { _, _ -> },
+    onAnswer: (String, Boolean) -> Unit = { _, _ -> },
+    onOpenFriend: (Link) -> Unit = {},
 ) {
     var male by remember(p0) { mutableStateOf(p0.male) }
     var year by remember(p0) { mutableStateOf(p0.birthYear.toString()) }
@@ -220,6 +233,10 @@ fun ProfileContent(
                 TextButton(onSignOut, Modifier.fillMaxWidth()) { Text("Выйти из аккаунта") }
             }
             authError?.let { Text(it, color = Warn, fontSize = 13.sp) }
+        }
+
+        if (account != null) Section("Друзья и семья") {
+            FriendsBlock(links, socialBusy, socialError, onInvite, onAnswer, onOpenFriend)
         }
 
         if (steps != StepsState.UNAVAILABLE) Section("Шаги") {

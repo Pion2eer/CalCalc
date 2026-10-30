@@ -168,6 +168,33 @@ class ScreenshotTest {
     @Test fun survey_health() = shot("20_survey_health") { SurveyContent(surveyed, 82.5, {}, {}, startStep = 2) }
     @Test fun survey_result() = shot("21_survey_result") { SurveyContent(surveyed, 82.5, {}, {}, startStep = 4) }
 
+    private val friendLinks = listOf(
+        ltd.pion.calcalc.sync.Link("rfvlad@gmail.com", family = false, accepted = false, incoming = true),
+        ltd.pion.calcalc.sync.Link("pokejul.mobile@gmail.com", family = true, accepted = true, incoming = false),
+        ltd.pion.calcalc.sync.Link("friend@example.com", family = false, accepted = false, incoming = false),
+    )
+
+    // a tall screen, so the friends section further down is in the picture
+    @Test @Config(qualifiers = "w406dp-h1700dp-xxhdpi")
+    fun profile_friends() = shot("22_profile_friends") {
+        ProfileContent(
+            Profile(true, 1990, 180, -1), 82.5, UpdateState.UpToDate, "pion2er@gmail.com", null,
+            "https://docs.google.com/spreadsheets/d/x", "https://script.google.com/macros/s/x/exec", true, "0.1.5",
+            { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {}, links = friendLinks,
+        )
+    }
+
+    @Test fun friend_food() = shot("23_friend_food") {
+        val food = listOf(
+            ltd.pion.calcalc.sync.FriendFood(today.toString(), at(13, 10), "Борщ со сметаной и хлеб", 410, 14.0, 18.0, 45.0,
+                """[{"name":"борщ","grams":300,"kcal":180},{"name":"хлеб","grams":60,"kcal":150}]"""),
+            ltd.pion.calcalc.sync.FriendFood(today.toString(), at(8, 30), "Сырники со сметаной", 520, 28.0, 24.0, 46.0, null),
+            ltd.pion.calcalc.sync.FriendFood(today.minusDays(1).toString(), at(19, 0), "Плов с курицей", 640, 30.0, 22.0, 80.0, null),
+            ltd.pion.calcalc.sync.FriendFood(today.minusDays(1).toString(), at(9, 0), "Овсянка с бананом", 320, 9.0, 6.0, 58.0, null),
+        )
+        FriendContent(friendLinks[1], food, null, today, { _, _ -> }, {}, {})
+    }
+
     @Test fun history() = shot("18_history") {
         fun h(id: Long, action: String, e: Entry, at: Long) = ltd.pion.calcalc.data.History.of(action, e).copy(id = id, at = at)
         val soup = entries[2]

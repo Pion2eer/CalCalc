@@ -102,6 +102,11 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             report(prefs, token, "sheet sync failed: $ex")
             again = true
         }
+        if (prefs.shareFood) try {
+            pushFood(prefs, token)
+        } catch (ex: Exception) {
+            report(prefs, token, "food share failed: $ex")
+        }
         if (!again) prefs.lastSync = System.currentTimeMillis()
         return if (again) Result.retry() else Result.success()
     }
@@ -133,6 +138,16 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         }
         Sheets.mirror(token, id, entries, db.weights().all().first(), Norm.daily(prefs.profile, weight))
         prefs.lastSheetSync = System.currentTimeMillis()
+    }
+
+    /** Friends and family see the last month of food; sent only when something changed since the last time. */
+    private suspend fun pushFood(prefs: Prefs, token: String) {
+        val entries = AppDb.get(applicationContext).entries().all()
+        val changed = entries.maxOfOrNull { maxOf(it.updatedAt, it.createdAt) } ?: 0
+        if (changed <= prefs.lastSocialPush) return
+        val from = java.time.LocalDate.now().minusDays(30).toString()
+        prefs.shareFood = Social.push(prefs.aiUrl, token, entries.filter { it.day >= from })
+        prefs.lastSocialPush = System.currentTimeMillis()
     }
 
     companion object {

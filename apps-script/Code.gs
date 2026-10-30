@@ -9,6 +9,10 @@
  *
  * Everything that happens is written to the spreadsheet «CalCalc AI журнал» on the owner's Drive, and a
  * trigger checks the PC every 10 minutes with a test request, so problems can be seen without a phone.
+ *
+ * Friends and family live in the spreadsheet «CalCalc друзья» on the owner's Drive: who has used the app (to find
+ * people by e-mail), the links between them, and the food of everyone with at least one accepted link, which the app
+ * sends after each sync. Food is shown only to people with an accepted link.
  */
 
 function doPost(e) {
@@ -20,6 +24,7 @@ function doPost(e) {
     if (action === 'localReg') return out_(localReg_(body));
     if (action === 'parse') return out_(parse_(body));
     if (action === 'clientLog') return out_(clientLog_(body));
+    if (action === 'social') return out_(social_(body));
     return out_({ ok: false, error: 'unknown action' });
   } catch (err) {
     log_('error', '', action + ': ' + err);
@@ -204,6 +209,7 @@ function parse_(b) {
     return { ok: false, error: 'Войдите через Google заново' };
   }
   var email = who.email;
+  seen_(email);
   if (!allowed_(who)) {
     log_('parse', email, 'нет в списке ALLOWED');
     return { ok: false, error: 'Нет доступа к ИИ для ' + email };
@@ -280,6 +286,163 @@ function askPc_(pc, text, image) {
 }
 
 function num_(v) { var n = Number(v); return isFinite(n) ? Math.round(n * 10) / 10 : null; }
+
+// ---- friends and family ----
+
+/** Run from the editor: two made-up people invite, accept, share food, see it, and part again. */
+function testSocial() {
+  var a = 'test-a@calcalc.test', b = 'test-b@calcalc.test';
+  seen_(a); seen_(b);
+  var r = [];
+  r.push(socialFor_(a, { op: 'invite', email: b, kind: 'family' }));
+  r.push(socialFor_(b, { op: 'feed', email: a }));
+  r.push(socialFor_(b, { op: 'list' }));
+  r.push(socialFor_(b, { op: 'answer', email: a, accept: true }));
+  r.push(socialFor_(a, { op: 'push', entries: [{ day: '2026-10-30', at: Date.now(), title: 'Тест борщ', kcal: 400 }] }));
+  r.push(socialFor_(b, { op: 'feed', email: a }));
+  r.push(socialFor_(a, { op: 'remove', email: b }));
+  r.push(socialFor_(b, { op: 'feed', email: a }));
+  var users = socialBook_().getSheetByName('users');
+  var rows = users.getDataRange().getValues();
+  for (var i = rows.length - 1; i >= 1; i--) if (rows[i][0] === a || rows[i][0] === b) users.deleteRow(i + 1);
+  CacheService.getScriptCache().removeAll(['seen:' + a, 'seen:' + b]);
+  Logger.log(JSON.stringify(r));
+  return r;
+}
+
+function socialBook_() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('SOCIAL_ID');
+  var ss = null;
+  if (id) try { ss = SpreadsheetApp.openById(id); } catch (x) { ss = null; }
+  if (!ss) {
+    ss = SpreadsheetApp.create('CalCalc друзья');
+    ss.getSheets()[0].setName('users').appendRow(['E-mail', 'Последний вход']);
+    ss.insertSheet('links').appendRow(['От', 'Кому', 'Кто', 'Статус', 'Когда']);
+    props.setProperty('SOCIAL_ID', ss.getId());
+  }
+  return ss;
+}
+
+/** Remembers who uses the app, so others can find them by e-mail; written at most every 6 hours per person. */
+function seen_(email) {
+  var cache = CacheService.getScriptCache();
+  if (cache.get('seen:' + email)) return;
+  try {
+    var sh = socialBook_().getSheetByName('users');
+    var rows = sh.getDataRange().getValues();
+    for (var i = 1; i < rows.length; i++) {
+      if (rows[i][0] === email) { sh.getRange(i + 1, 2).setValue(new Date()); cache.put('seen:' + email, '1', 21600); return; }
+    }
+    sh.appendRow([email, new Date()]);
+    cache.put('seen:' + email, '1', 21600);
+  } catch (x) {}
+}
+
+function known_(email) {
+  var rows = socialBook_().getSheetByName('users').getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) if (rows[i][0] === email) return true;
+  return false;
+}
+
+/** Links as [{row, from, to, kind, status}]; a link is one row whoever sent the invite. */
+function links_() {
+  var rows = socialBook_().getSheetByName('links').getDataRange().getValues();
+  var out = [];
+  for (var i = 1; i < rows.length; i++) out.push({ row: i + 1, from: rows[i][0], to: rows[i][1], kind: rows[i][2], status: rows[i][3] });
+  return out;
+}
+
+function linkOf_(a, b) {
+  return links_().filter(function (l) { return (l.from === a && l.to === b) || (l.from === b && l.to === a); })[0] || null;
+}
+
+function friendsOf_(email) {
+  return links_().filter(function (l) { return l.status === 'accepted' && (l.from === email || l.to === email); });
+}
+
+function foodSheet_(email, create) {
+  var ss = socialBook_();
+  var name = 'food:' + email;
+  var sh = ss.getSheetByName(name);
+  if (!sh && create) sh = ss.insertSheet(name);
+  return sh;
+}
+
+function social_(b) {
+  var who = caller_(b.accessToken);
+  if (!who) return { ok: false, error: 'Войдите через Google заново' };
+  if (!allowed_(who)) return { ok: false, error: 'Нет доступа для ' + who.email };
+  seen_(who.email);
+  return socialFor_(who.email, b);
+}
+
+function socialFor_(me, b) {
+  var other = String(b.email || '').trim().toLowerCase();
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    switch (b.op) {
+      case 'list':
+        return { ok: true, links: links_().filter(function (l) { return l.from === me || l.to === me; }).map(function (l) {
+          return { email: l.from === me ? l.to : l.from, kind: l.kind, status: l.status, incoming: l.to === me };
+        }) };
+      case 'invite': {
+        if (!other || other === me) return { ok: false, error: 'Введите e-mail другого человека' };
+        if (!known_(other)) return { ok: false, error: other + ' ещё не входил в CalCalc. Пусть установит приложение и войдёт через Google' };
+        var kind = b.kind === 'family' ? 'family' : 'friend';
+        var l = linkOf_(me, other);
+        var sh = socialBook_().getSheetByName('links');
+        if (!l) {
+          sh.appendRow([me, other, kind, 'pending', new Date()]);
+          log_('social', me, 'приглашение для ' + other + ' (' + kind + ')');
+        } else if (l.status === 'pending' && l.to === me) {
+          // they invited me first: inviting back is the same as accepting
+          sh.getRange(l.row, 4, 1, 2).setValues([['accepted', new Date()]]);
+          log_('social', me, 'принял ' + other);
+        }
+        return { ok: true };
+      }
+      case 'answer': {
+        var a = linkOf_(me, other);
+        if (!a || a.to !== me || a.status !== 'pending') return { ok: false, error: 'Приглашения нет' };
+        var links = socialBook_().getSheetByName('links');
+        if (b.accept) links.getRange(a.row, 4, 1, 2).setValues([['accepted', new Date()]]);
+        else links.deleteRow(a.row);
+        log_('social', me, (b.accept ? 'принял ' : 'отклонил ') + other);
+        return { ok: true };
+      }
+      case 'remove': {
+        var r = linkOf_(me, other);
+        if (r) socialBook_().getSheetByName('links').deleteRow(r.row);
+        log_('social', me, 'убрал ' + other);
+        if (!friendsOf_(me).length) { var f0 = foodSheet_(me, false); if (f0) socialBook_().deleteSheet(f0); }
+        return { ok: true };
+      }
+      case 'push': {
+        // the food is kept only while someone may look at it
+        if (!friendsOf_(me).length) {
+          var f1 = foodSheet_(me, false);
+          if (f1) socialBook_().deleteSheet(f1);
+          return { ok: true, shared: false };
+        }
+        var list = Array.isArray(b.entries) ? b.entries.slice(0, 600) : [];
+        var fs = foodSheet_(me, true);
+        fs.clearContents();
+        if (list.length) fs.getRange(1, 1, list.length, 1).setValues(list.map(function (e) { return [JSON.stringify(e).slice(0, 45000)]; }));
+        return { ok: true, shared: true };
+      }
+      case 'feed': {
+        var link = linkOf_(me, other);
+        if (!link || link.status !== 'accepted') return { ok: false, error: 'Нет доступа к еде ' + other };
+        var food = foodSheet_(other, false);
+        var rows = food && food.getLastRow() ? food.getRange(1, 1, food.getLastRow(), 1).getValues() : [];
+        return { ok: true, entries: rows.map(function (r) { try { return JSON.parse(r[0]); } catch (x) { return null; } }).filter(Boolean) };
+      }
+    }
+    return { ok: false, error: 'unknown op' };
+  } finally { lock.releaseLock(); }
+}
 
 function out_(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
