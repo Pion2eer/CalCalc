@@ -190,6 +190,8 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
             onRewrite = { vm.rewrite(e, it); editing = null },
             onDelete = { vm.delete(e); editing = null },
             favorite = favs.any { it.title == e.title }, onFavorite = { vm.toggleFavorite(e) },
+            onSteps = if (isSteps(e)) ({ n, k -> vm.setSteps(e, n, k); editing = null }) else null,
+            stepsKcal = vm::stepsKcal,
         )
     }
 }
@@ -761,8 +763,12 @@ private fun parseOptions(json: String?): List<String> = try {
 fun EntryDialog(
     e: Entry, onDismiss: () -> Unit, onSave: (title: String, kcal: Int, grams: Int?) -> Unit, onRewrite: (String) -> Unit, onDelete: () -> Unit,
     favorite: Boolean = false, onFavorite: () -> Unit = {},
+    onSteps: ((Long, Int) -> Unit)? = null, stepsKcal: (Long) -> Int = { 0 },
 ) {
     val burn = (e.kcal ?: 0) < 0 || e.type == EntryType.ACTIVITY
+    // the steps entry is edited by its number of steps: words would go to the AI as food
+    val steps = onSteps != null
+    var stepCount by remember { mutableStateOf(if (steps) e.title.filter { it.isDigit() } else "") }
     val food = e.type == EntryType.FOOD
     val parts = remember(e.items) { itemsOf(e.items) }
     // the weight the AI counted: a new weight scales the calories without asking it again
@@ -774,7 +780,7 @@ fun EntryDialog(
     // a new description means new calories: they are counted again from the text, the number field waits
     val newGrams = grams.toIntOrNull()?.takeIf { it > 0 }
     val askWeight = food && baseGrams == null && newGrams != null
-    val rewritten = record.trim() != e.rawText.trim() || askWeight
+    val rewritten = !steps && (record.trim() != e.rawText.trim() || askWeight)
     val photo by produceState<android.graphics.Bitmap?>(null, e.photo) {
         value = e.photo?.let { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Photos.thumbnail(it, 640) } }
     }
@@ -790,7 +796,7 @@ fun EntryDialog(
                     )
                     Spacer(Modifier.height(12.dp))
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!steps) Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         name, { name = it.take(100) },
                         label = { Text("Название") },
@@ -807,7 +813,18 @@ fun EntryDialog(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
+                if (steps) OutlinedTextField(
+                    stepCount,
+                    { v ->
+                        stepCount = v.filter { it.isDigit() }.take(6)
+                        stepCount.toLongOrNull()?.let { text = stepsKcal(it).toString() }
+                    },
+                    label = { Text("Шагов за день") },
+                    supportingText = { Text("Шаги из телефона больше не будут менять эту запись") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                ) else OutlinedTextField(
                     record, { record = it.take(500) },
                     label = { Text(if (burn) "Тренировка" else "Что съели") },
                     modifier = Modifier.fillMaxWidth(),
@@ -865,7 +882,8 @@ fun EntryDialog(
         confirmButton = {
             TextButton(
                 {
-                    if (rewritten) onRewrite(if (askWeight) "${record.trim()}, $newGrams г" else record)
+                    if (steps) { val n = stepCount.toLongOrNull(); val k = text.toIntOrNull(); if (n != null && k != null) onSteps!!(n, k) }
+                    else if (rewritten) onRewrite(if (askWeight) "${record.trim()}, $newGrams г" else record)
                     else text.toIntOrNull()?.let { onSave(name.trim().ifBlank { e.title }, if (burn) -it else it, newGrams.takeIf { baseGrams != null && it != baseGrams }) }
                 },
                 enabled = if (rewritten) record.isNotBlank() else text.isNotEmpty(),

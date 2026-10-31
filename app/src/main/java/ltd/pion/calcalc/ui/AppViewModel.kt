@@ -58,6 +58,10 @@ data class DaySummary(
     val left get() = norm + burned - eaten
 }
 
+fun stepsTitle(count: Long) = "Шаги: " + String.format(java.util.Locale("ru"), "%,d", count)
+
+fun isSteps(e: Entry) = e.id.startsWith("steps-")
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val db = AppDb.get(app)
@@ -151,32 +155,61 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val stepCount: StateFlow<Long?> = _stepCount.asStateFlow()
 
     /**
-     * Today's steps from Health Connect become one activity entry of the day, «Шаги: 8 400». Walking typed in by
-     * hand is already inside those steps, so only the rest is added. An entry the user corrected is left alone.
+     * Steps from Health Connect become one activity entry a day, «Шаги: 8 400», for the shown day and the week before
+     * it, so a day whose entry got lost comes back. Walking typed in by hand is already inside those steps, so only the
+     * rest is added. An entry the user corrected through the steps field is left alone.
      */
     fun refreshSteps() = viewModelScope.launch {
         val ctx = getApplication<Application>()
         _steps.value = runCatching { Steps.state(ctx) }.getOrDefault(StepsState.UNAVAILABLE)
         if (_steps.value != StepsState.ON) return@launch
-        val day = _day.value
-        val count = runCatching { Steps.count(ctx, day) }.getOrNull() ?: return@launch
-        _stepCount.value = count
+        val shown = _day.value
+        val today = LocalDate.now()
+        val days = ((0L..7L).map { today.minusDays(it) } + shown).distinct()
+        var changed = false
+        for (day in days) {
+            val count = runCatching { Steps.count(ctx, day) }.getOrNull() ?: continue
+            if (day == shown) _stepCount.value = count
+            if (stepsEntry(day, count)) changed = true
+        }
+        if (changed) SyncWorker.enqueue(ctx)
+    }
+
+    private suspend fun stepsEntry(day: LocalDate, count: Long): Boolean {
         val id = "steps-$day"
         val old = db.entries().byId(id)
-        if (old?.editedByUser == true || (old == null && count == 0L)) return@launch
+        // an older version sent an edited steps entry to the AI as food: such an entry is put right again
+        val intact = old != null && old.type == EntryType.ACTIVITY && old.title.startsWith("Шаги")
+        if ((intact && old!!.editedByUser) || (old == null && count == 0L)) return false
         val walked = db.entries().forDayOnce(day.toString())
             .filter { it.type == EntryType.ACTIVITY && it.id != id && it.title.startsWith("Ходьба") }
             .sumOf { -(it.kcal ?: 0) }
         val kcal = (Activities.stepsKcal(count, weight.value) - walked).coerceAtLeast(0)
-        val title = "Шаги: " + String.format(java.util.Locale("ru"), "%,d", count)
-        if (old != null && old.title == title && old.kcal == -kcal) return@launch
+        val title = stepsTitle(count)
+        if (intact && old!!.title == title && old.kcal == -kcal) return false
         db.entries().upsert(
             Entry(
                 id = id, type = EntryType.ACTIVITY, rawText = title, title = title, kcal = -kcal,
                 status = EntryStatus.DONE, day = day.toString(), createdAt = old?.createdAt ?: System.currentTimeMillis(),
             )
         )
-        SyncWorker.enqueue(ctx)
+        return true
+    }
+
+    /** Burned calories for a number of steps, for the steps field of the entry form. */
+    fun stepsKcal(count: Long) = Activities.stepsKcal(count, weight.value)
+
+    /** The user's own step count: kept as they typed it, Health Connect no longer overwrites it. */
+    fun setSteps(entry: Entry, count: Long, kcal: Int) = viewModelScope.launch {
+        val title = stepsTitle(count)
+        save(
+            entry.copy(
+                type = EntryType.ACTIVITY, rawText = title, title = title, kcal = -kotlin.math.abs(kcal), status = EntryStatus.DONE,
+                editedByUser = true, synced = false, updatedAt = System.currentTimeMillis(),
+            ),
+            HistoryAction.EDIT,
+        )
+        SyncWorker.enqueue(getApplication())
     }
 
     fun shiftDay(by: Long) {
