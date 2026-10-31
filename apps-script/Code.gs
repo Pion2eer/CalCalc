@@ -1,8 +1,9 @@
 /**
  * CalCalc shared AI script. Deploy as a web app: Execute as "Me", access "Anyone".
  * Nothing to configure: the script owner may use the AI; other e-mails go in the optional script property
- *   ALLOWED — extra comma-separated e-mails ("*" = anyone signed in with Google). Not needed for test users of the
- *   app's OAuth client: their tokens are let in (APP_CLIENT, learned from the owner's app).
+ *   ALLOWED — extra comma-separated e-mails ("*" = anyone signed in with Google). Everyone else needs a token of the
+ *   app's OAuth client (APP_CLIENT, learned from the owner's app) and to be a member: used the AI before, or invited
+ *   by someone through «Друзья и семья».
  * The PC registers itself every 4 minutes: POST ?action=localReg {url, token, model, paused}. The first
  * registration pins the PC's proxy token; after that only the same token may move the address
  * (to change PCs, delete the PC_TOKEN property).
@@ -167,9 +168,9 @@ function caller_(accessToken) {
 }
 
 /**
- * Who may use the AI. The CalCalc OAuth client is in testing mode, so only the test users added in the Google Cloud
- * console can get a token from it at all: a token issued to that client is enough, no second list to keep. The
- * client is learned from the first call of the owner or of someone in ALLOWED. ALLOWED still adds e-mails by hand.
+ * Who may use the AI. Anyone with a Google account can sign in to the app, so a token from the CalCalc OAuth client
+ * (APP_CLIENT, learned from the owner's app) is not enough by itself: the person must already be a member (has used
+ * the AI before) or be invited by someone through «Друзья и семья». The owner and ALLOWED ("*" = anyone) always pass.
  */
 function allowed_(who) {
   var props = PropertiesService.getScriptProperties();
@@ -179,7 +180,6 @@ function allowed_(who) {
     return true;
   }
   var app = props.getProperty('APP_CLIENT');
-  if (app && who.app === app) return true;
   var list = String(props.getProperty('ALLOWED') || '')
     .toLowerCase().split(',').map(function (s) { return s.trim(); }).filter(String);
   // someone listed by hand uses the same app, so their token teaches the client too, without waiting for the owner
@@ -187,7 +187,26 @@ function allowed_(who) {
     if (!app && who.app) props.setProperty('APP_CLIENT', who.app);
     return true;
   }
-  return list.indexOf('*') >= 0;
+  if (list.indexOf('*') >= 0) return true;
+  return !!app && who.app === app && member_(who.email);
+}
+
+/** Has used the AI already (the friends book or a counted entry in the journal), or someone invited them. */
+function member_(email) {
+  var cache = CacheService.getScriptCache();
+  if (cache.get('member:' + email)) return true;
+  var ok = false;
+  var users = socialBook_().getSheetByName('users').getDataRange().getValues();
+  for (var i = 1; i < users.length && !ok; i++) if (users[i][0] === email) ok = true;
+  if (!ok) ok = links_().some(function (l) { return l.to === email || l.from === email; });
+  if (!ok) {
+    var log = logSheet_().getDataRange().getValues();
+    for (var j = 1; j < log.length && !ok; j++) {
+      if (log[j][1] === 'parse' && String(log[j][2]).toLowerCase() === email && String(log[j][3]).indexOf('ккал') >= 0) ok = true;
+    }
+  }
+  if (ok) cache.put('member:' + email, '1', 21600);
+  return ok;
 }
 
 // A small model is bad at multiplying in its head: it gives grams and kcal per 100 g for each item, the script does the sums
@@ -209,11 +228,11 @@ function parse_(b) {
     return { ok: false, error: 'Войдите через Google заново' };
   }
   var email = who.email;
-  seen_(email);
   if (!allowed_(who)) {
-    log_('parse', email, 'нет в списке ALLOWED');
-    return { ok: false, error: 'Нет доступа к ИИ для ' + email };
+    log_('parse', email, 'нет доступа: не приглашён');
+    return { ok: false, error: 'Нет доступа к ИИ для ' + email + '. Попросите знакомого с CalCalc пригласить вас в «Друзья и семья»' };
   }
+  seen_(email);
   var text = String(b.text || '').slice(0, 1000);
   // a photo of the food comes as base64 JPEG, with the user's words (if any) as a hint
   var image = b.image ? String(b.image) : null;
@@ -344,7 +363,7 @@ function known_(email) {
   var rows = socialBook_().getSheetByName('users').getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) if (rows[i][0] === email) return true;
   var log = logSheet_().getDataRange().getValues();
-  for (var j = 1; j < log.length; j++) if (String(log[j][2]).toLowerCase() === email) { seen_(email); return true; }
+  for (var j = 1; j < log.length; j++) if (String(log[j][2]).toLowerCase() === email) return true;
   return false;
 }
 
