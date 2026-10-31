@@ -465,8 +465,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val token = GoogleAuth.silentToken(getApplication()) ?: throw SocialError("Google просит войти заново")
             block(prefs.aiUrl, token)
-            val list = Social.list(prefs.aiUrl, token)
+            val circle = Social.list(prefs.aiUrl, token)
+            val list = circle.links
             _links.value = list
+            _requests.value = circle.requests
             val share = list.any { it.accepted }
             if (share && !prefs.shareFood) {
                 // the first accepted link: send the food now, so the friend sees it right away
@@ -483,6 +485,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _socialBusy.value = false
         }
     }
+
+    private val _requests = MutableStateFlow<List<String>?>(null)
+    /** People waiting for the owner's approval to use the AI; null when this is not the owner. */
+    val requests: StateFlow<List<String>?> = _requests.asStateFlow()
+    fun approve(email: String, accept: Boolean) = social { u, t -> Social.approve(u, t, email, accept) }
 
     fun refreshFriends() = social { _, _ -> }
     fun invite(email: String, family: Boolean) = social { u, t -> Social.invite(u, t, email, family) }

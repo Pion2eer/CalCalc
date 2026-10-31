@@ -2,8 +2,8 @@
  * CalCalc shared AI script. Deploy as a web app: Execute as "Me", access "Anyone".
  * Nothing to configure: the script owner may use the AI; other e-mails go in the optional script property
  *   ALLOWED — extra comma-separated e-mails ("*" = anyone signed in with Google). Everyone else needs a token of the
- *   app's OAuth client (APP_CLIENT, learned from the owner's app) and to be a member: used the AI before, or invited
- *   by someone through «Друзья и семья».
+ *   app's OAuth client (APP_CLIENT, learned from the owner's app) and to be a member: approved by the owner in the
+ *   app (Профиль → «Доступ к ИИ»), or used the AI before.
  * The PC registers itself every 4 minutes: POST ?action=localReg {url, token, model, paused}. The first
  * registration pins the PC's proxy token; after that only the same token may move the address
  * (to change PCs, delete the PC_TOKEN property).
@@ -169,8 +169,9 @@ function caller_(accessToken) {
 
 /**
  * Who may use the AI. Anyone with a Google account can sign in to the app, so a token from the CalCalc OAuth client
- * (APP_CLIENT, learned from the owner's app) is not enough by itself: the person must already be a member (has used
- * the AI before) or be invited by someone through «Друзья и семья». The owner and ALLOWED ("*" = anyone) always pass.
+ * (APP_CLIENT, learned from the owner's app) is not enough by itself: the person must be a member, approved by the
+ * owner in the app (a new person lands in the «requests» list) or one who used the AI before. The owner and ALLOWED
+ * ("*" = anyone) always pass.
  */
 function allowed_(who) {
   var props = PropertiesService.getScriptProperties();
@@ -191,14 +192,13 @@ function allowed_(who) {
   return !!app && who.app === app && member_(who.email);
 }
 
-/** Has used the AI already (the friends book or a counted entry in the journal), or someone invited them. */
+/** Approved by the owner (the friends book), or used the AI before sign-in was open to all (a counted entry in the journal). */
 function member_(email) {
   var cache = CacheService.getScriptCache();
   if (cache.get('member:' + email)) return true;
   var ok = false;
   var users = socialBook_().getSheetByName('users').getDataRange().getValues();
   for (var i = 1; i < users.length && !ok; i++) if (users[i][0] === email) ok = true;
-  if (!ok) ok = links_().some(function (l) { return l.to === email || l.from === email; });
   if (!ok) {
     var log = logSheet_().getDataRange().getValues();
     for (var j = 1; j < log.length && !ok; j++) {
@@ -229,8 +229,8 @@ function parse_(b) {
   }
   var email = who.email;
   if (!allowed_(who)) {
-    log_('parse', email, 'нет доступа: не приглашён');
-    return { ok: false, error: 'Нет доступа к ИИ для ' + email + '. Попросите знакомого с CalCalc пригласить вас в «Друзья и семья»' };
+    log_('parse', email, 'нет доступа: ждёт одобрения');
+    return denied_(who);
   }
   seen_(email);
   var text = String(b.text || '').slice(0, 1000);
@@ -344,6 +344,35 @@ function socialBook_() {
 }
 
 /** Remembers who uses the app, so others can find them by e-mail; written at most every 6 hours per person. */
+function isOwner_(email) {
+  return email === String(Session.getEffectiveUser().getEmail() || '').toLowerCase();
+}
+
+/** Someone the owner has not approved yet: noted once in «requests», so the owner sees them in the app. */
+function denied_(who) {
+  var app = PropertiesService.getScriptProperties().getProperty('APP_CLIENT');
+  if (app && who.app === app) {
+    var cache = CacheService.getScriptCache();
+    if (!cache.get('req:' + who.email)) {
+      try {
+        var sh = requestsSheet_();
+        var rows = sh.getDataRange().getValues();
+        var has = rows.some(function (r) { return r[0] === who.email; });
+        if (!has) { sh.appendRow([who.email, new Date(), 'pending']); log_('access', who.email, 'просит доступ к ИИ'); }
+      } catch (x) {}
+      cache.put('req:' + who.email, '1', 3600);
+    }
+  }
+  return { ok: false, error: 'Нет доступа к ИИ: ждём, когда владелец CalCalc одобрит ' + who.email };
+}
+
+function requestsSheet_() {
+  var ss = socialBook_();
+  var sh = ss.getSheetByName('requests');
+  if (!sh) { sh = ss.insertSheet('requests'); sh.appendRow(['E-mail', 'Когда', 'Статус']); }
+  return sh;
+}
+
 function seen_(email) {
   var cache = CacheService.getScriptCache();
   if (cache.get('seen:' + email)) return;
@@ -394,7 +423,7 @@ function foodSheet_(email, create) {
 function social_(b) {
   var who = caller_(b.accessToken);
   if (!who) return { ok: false, error: 'Войдите через Google заново' };
-  if (!allowed_(who)) return { ok: false, error: 'Нет доступа для ' + who.email };
+  if (!allowed_(who)) return denied_(who);
   seen_(who.email);
   return socialFor_(who.email, b);
 }
@@ -405,10 +434,24 @@ function socialFor_(me, b) {
   lock.waitLock(20000);
   try {
     switch (b.op) {
-      case 'list':
-        return { ok: true, links: links_().filter(function (l) { return l.from === me || l.to === me; }).map(function (l) {
+      case 'list': {
+        var res = { ok: true, links: links_().filter(function (l) { return l.from === me || l.to === me; }).map(function (l) {
           return { email: l.from === me ? l.to : l.from, kind: l.kind, status: l.status, incoming: l.to === me };
         }) };
+        // the owner also gets the people waiting for the AI
+        if (isOwner_(me)) res.requests = requestsSheet_().getDataRange().getValues().slice(1)
+          .filter(function (r) { return r[2] === 'pending'; }).map(function (r) { return r[0]; });
+        return res;
+      }
+      case 'approve': {
+        if (!isOwner_(me)) return { ok: false, error: 'Одобрять может только владелец' };
+        var rq = requestsSheet_();
+        var all = rq.getDataRange().getValues();
+        for (var k = 1; k < all.length; k++) if (all[k][0] === other) rq.getRange(k + 1, 3).setValue(b.accept ? 'approved' : 'denied');
+        if (b.accept) { CacheService.getScriptCache().remove('seen:' + other); seen_(other); }
+        log_('access', me, (b.accept ? 'одобрил ' : 'отклонил ') + other);
+        return { ok: true };
+      }
       case 'invite': {
         if (!other || other === me) return { ok: false, error: 'Введите e-mail другого человека' };
         // someone not seen yet still gets the invite: they find it in the profile once they open the new version

@@ -76,6 +76,7 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit, onO
     val links by vm.links.collectAsState()
     val socialBusy by vm.socialBusy.collectAsState()
     val socialError by vm.socialError.collectAsState()
+    val requests by vm.requests.collectAsState()
     LaunchedEffect(account) { if (account != null) vm.refreshFriends() }
     val signInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
         vm.onSignInResult(it.data)
@@ -93,7 +94,7 @@ fun ProfileScreen(vm: AppViewModel, modifier: Modifier, onSaved: () -> Unit, onO
         steps = steps, stepCount = stepCount, sync = sync,
         theme = theme, onTheme = { vm.prefs.theme = it }, onOpenLog = onOpenLog, onOpenSurvey = onOpenSurvey,
         links = links, socialBusy = socialBusy, socialError = socialError, onInvite = vm::invite,
-        onAnswer = vm::answerInvite, onOpenFriend = onOpenFriend,
+        onAnswer = vm::answerInvite, onOpenFriend = onOpenFriend, requests = requests, onApprove = vm::approve,
         onSteps = {
             if (steps == StepsState.NEEDS_INSTALL) ctx.startActivity(
                 Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${Steps.PROVIDER}&url=healthconnect%3A%2F%2Fonboarding"))
@@ -137,6 +138,8 @@ fun ProfileContent(
     onInvite: (String, Boolean) -> Unit = { _, _ -> },
     onAnswer: (String, Boolean) -> Unit = { _, _ -> },
     onOpenFriend: (Link) -> Unit = {},
+    requests: List<String>? = null,
+    onApprove: (String, Boolean) -> Unit = { _, _ -> },
 ) {
     var male by remember(p0) { mutableStateOf(p0.male) }
     var year by remember(p0) { mutableStateOf(p0.birthYear.toString()) }
@@ -233,6 +236,20 @@ fun ProfileContent(
                 TextButton(onSignOut, Modifier.fillMaxWidth()) { Text("Выйти из аккаунта") }
             }
             authError?.let { Text(it, color = Warn, fontSize = 13.sp) }
+        }
+
+        // only the owner of the AI gets this list: people who signed in and wait to use it
+        if (account != null && requests != null) Section("Доступ к ИИ") {
+            if (requests.isEmpty()) Text("Новых запросов нет. Кто впервые войдёт в CalCalc, появится здесь.", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            requests.forEach { email ->
+                Column(Modifier.fillMaxWidth()) {
+                    Text(email, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button({ onApprove(email, true) }, enabled = !socialBusy) { Text("Одобрить") }
+                        OutlinedButton({ onApprove(email, false) }, enabled = !socialBusy) { Text("Отклонить") }
+                    }
+                }
+            }
         }
 
         if (account != null) Section("Друзья и семья") {

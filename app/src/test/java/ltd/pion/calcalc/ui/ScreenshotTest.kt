@@ -180,7 +180,7 @@ class ScreenshotTest {
         ProfileContent(
             Profile(true, 1990, 180, -1), 82.5, UpdateState.UpToDate, "pion2er@gmail.com", null,
             "https://docs.google.com/spreadsheets/d/x", "https://script.google.com/macros/s/x/exec", true, "0.1.5",
-            { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {}, links = friendLinks,
+            { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {}, links = friendLinks, requests = listOf("new.user@gmail.com"),
         )
     }
 

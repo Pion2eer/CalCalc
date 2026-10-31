@@ -20,6 +20,9 @@ data class FriendFood(
     val items: String?,
 )
 
+/** The links, and for the owner the people waiting for the AI (null for everyone else). */
+data class Circle(val links: List<Link>, val requests: List<String>?)
+
 class SocialError(message: String) : Exception(message)
 
 /** Friends and family through the shared script: invites by e-mail, and food seen only by accepted links. */
@@ -31,11 +34,19 @@ object Social {
         return j
     }
 
-    suspend fun list(url: String, token: String): List<Link> {
-        val a = call(url, token, "list").optJSONArray("links") ?: JSONArray()
-        return (0 until a.length()).map { a.getJSONObject(it) }.map {
+    suspend fun list(url: String, token: String): Circle {
+        val j = call(url, token, "list")
+        val a = j.optJSONArray("links") ?: JSONArray()
+        val links = (0 until a.length()).map { a.getJSONObject(it) }.map {
             Link(it.getString("email"), it.optString("kind") == "family", it.optString("status") == "accepted", it.optBoolean("incoming"))
         }
+        val r = j.optJSONArray("requests")
+        return Circle(links, r?.let { (0 until it.length()).map { i -> it.getString(i) } })
+    }
+
+    /** The owner lets someone use the AI, or turns them down. */
+    suspend fun approve(url: String, token: String, email: String, accept: Boolean) {
+        call(url, token, "approve") { put("email", email); put("accept", accept) }
     }
 
     suspend fun invite(url: String, token: String, email: String, family: Boolean) {
