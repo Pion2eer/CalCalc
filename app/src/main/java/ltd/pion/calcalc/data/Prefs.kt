@@ -80,6 +80,11 @@ class Prefs(context: Context) {
         get() = sp.getString("sheetId", null)
         set(v) = sp.edit().putString("sheetId", v).apply()
 
+    /** The sheet already checked for lying in the Drive root and moved into the «CalCalc» folder. */
+    var sheetTidied: String?
+        get() = sp.getString("sheetTidied", null)
+        set(v) = sp.edit().putString("sheetTidied", v).apply()
+
     var lastSheetSync: Long
         get() = sp.getLong("lastSheetSync", 0)
         set(v) = sp.edit().putLong("lastSheetSync", v).apply()

@@ -123,6 +123,37 @@ object Sheets {
     }
 }
 
+/** Keeps the app's files in a «CalCalc» folder on the user's Drive instead of its root (drive.file sees only our own files). */
+object DriveFolder {
+    private const val FILES = "https://www.googleapis.com/drive/v3/files"
+    private const val FOLDER = "application/vnd.google-apps.folder"
+    private const val SHEET = "application/vnd.google-apps.spreadsheet"
+
+    private fun q(query: String) = java.net.URLEncoder.encode(query, "UTF-8")
+
+    private fun firstId(query: String, token: String): String? {
+        val a = JSONObject(Http.get("$FILES?q=${q(query)}&fields=files(id)&pageSize=10", token)).optJSONArray("files")
+        return if (a != null && a.length() > 0) a.getJSONObject(0).getString("id") else null
+    }
+
+    private fun folder(token: String): String =
+        firstId("mimeType='$FOLDER' and name='CalCalc' and trashed=false", token)
+            ?: JSONObject(Http.post("$FILES?fields=id", token, JSONObject().put("name", "CalCalc").put("mimeType", FOLDER).toString()))
+                .getString("id")
+
+    /** Moves the sheet into the folder if it still lies in the Drive root; a sheet the user put elsewhere stays there. */
+    suspend fun tidy(token: String, fileId: String): Unit = withContext(Dispatchers.IO) {
+        val inRoot = JSONObject(
+            Http.get("$FILES?q=${q("'root' in parents and name='CalCalc' and mimeType='$SHEET' and trashed=false")}&fields=files(id)", token)
+        ).optJSONArray("files")?.let { a -> (0 until a.length()).any { a.getJSONObject(it).getString("id") == fileId } } ?: false
+        if (inRoot) {
+            val parents = JSONObject(Http.get("$FILES/$fileId?fields=parents", token)).optJSONArray("parents")
+                ?.let { a -> (0 until a.length()).joinToString(",") { a.getString(it) } }.orEmpty()
+            Http.patch("$FILES/$fileId?addParents=${folder(token)}&removeParents=$parents&fields=id", token, "{}")
+        }
+    }
+}
+
 /** The shared AI on Dimon's PC, reached through his Apps Script, which checks the Google token and the allowlist. */
 object Ai {
     class Answer(
@@ -165,10 +196,13 @@ object Ai {
 object Http {
     fun get(url: String, token: String): String = request("GET", url, token, null)
     fun post(url: String, token: String, json: String): String = request("POST", url, token, json)
+    /** HttpURLConnection has no PATCH; Google APIs take it as a POST with an override header. */
+    fun patch(url: String, token: String, json: String): String = request("POST", url, token, json, "PATCH")
 
-    private fun request(method: String, url: String, token: String, json: String?): String {
+    private fun request(method: String, url: String, token: String, json: String?, override: String? = null): String {
         val c = URL(url).openConnection() as HttpURLConnection
         c.requestMethod = method
+        if (override != null) c.setRequestProperty("X-HTTP-Method-Override", override)
         c.connectTimeout = 20_000
         c.readTimeout = 60_000
         c.setRequestProperty("Authorization", "Bearer $token")
