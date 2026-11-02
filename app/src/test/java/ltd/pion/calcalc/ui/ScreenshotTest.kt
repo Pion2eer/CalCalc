@@ -8,6 +8,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeRight
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import ltd.pion.calcalc.data.DayTotal
@@ -81,6 +84,20 @@ class ScreenshotTest {
         day: LocalDate = today, blocker: String? = null, quick: List<QuickItem> = emptyList(),
         suggestions: List<QuickItem> = emptyList(),
     ) = TodayContent(day, today, list, s, update, blocker, {}, {}, {}, { _, _ -> }, {}, initialInput = input, quick = quick, suggestions = suggestions)
+
+    /** A past day: the finger drags «Кофе» to the right, the green «copy» shows under it. */
+    @Test fun today_copy_dragging() = shot("24_copy_dragging") { today(entries.take(3), summary, day = today.minusDays(1)) }.also {
+        compose.onNodeWithText("Кофе с молоком").performTouchInput { down(centerLeft); moveBy(androidx.compose.ui.geometry.Offset(width * 0.35f, 0f)) }
+        compose.mainClock.advanceTimeBy(300)
+        captureScreenRoboImage("build/outputs/roborazzi/24_copy_dragging.png")
+    }
+
+    /** Past the half way the row asks whether to copy it into today. */
+    @Test fun today_copy_ask() = shot("25_copy_ask") { today(entries.take(3), summary, day = today.minusDays(1)) }.also {
+        compose.onNodeWithText("Кофе с молоком").performTouchInput { swipeRight(startX = left + 5f, endX = right - 5f, durationMillis = 600) }
+        compose.mainClock.advanceTimeBy(1000)
+        captureScreenRoboImage("build/outputs/roborazzi/25_copy_ask.png")
+    }
 
     @Test fun today_empty() = shot("01_today_empty") { today(emptyList(), DaySummary(2100, 0, 0, 0)) }
 
