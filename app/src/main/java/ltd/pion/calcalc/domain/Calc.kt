@@ -21,8 +21,17 @@ object Norm {
 
     /** Macros in use: typed ones win one by one; the rest are calculated for the norm in use. */
     fun targetMacros(profile: Profile, weightKg: Double, today: LocalDate = LocalDate.now()): Macros {
-        val m = macros(profile, weightKg, target(profile, weightKg, today))
-        return Macros(profile.ownProtein ?: m.protein, profile.ownFat ?: m.fat, profile.ownCarbs ?: m.carbs)
+        val kcal = target(profile, weightKg, today)
+        val m = macros(profile, weightKg, kcal)
+        val own = listOf(profile.ownProtein, profile.ownFat, profile.ownCarbs)
+        if (own.all { it == null }) return m
+        // the macros left empty share what the typed ones leave of the calories, in the calculated proportion
+        val per = listOf(4, 9, 4)
+        val calc = listOf(m.protein, m.fat, m.carbs)
+        val left = (kcal - own.indices.sumOf { (own[it] ?: 0) * per[it] }).coerceAtLeast(0)
+        val freeKcal = own.indices.filter { own[it] == null }.sumOf { calc[it] * per[it] }.coerceAtLeast(1)
+        val g = own.indices.map { own[it] ?: Math.round(calc[it] * per[it].toDouble() / freeKcal * left / per[it]).toInt() }
+        return Macros(g[0], g[1], g[2])
     }
 
     /** Everyday movement without workouts: sitting, on the feet, physical work. Workouts are added per day. */

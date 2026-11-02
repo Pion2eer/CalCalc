@@ -71,4 +71,13 @@ class CalcTest {
         val p = Profile(male = true, birthYear = 1990, heightCm = 180, goal = 0, activity = 1)
         assertEquals(2406, Norm.daily(p, 80.0, LocalDate.of(2026, 10, 28)))
     }
+
+    @Test fun ownNormWinsAndTheRestFillsIt() {
+        val p = Profile(ownKcal = 1900, ownProtein = 160)
+        assertEquals(1900, Norm.target(p, 80.0))
+        val m = Norm.targetMacros(p, 80.0)
+        assertEquals(160, m.protein)
+        assertTrue(kotlin.math.abs(1900 - (m.protein * 4 + m.fat * 9 + m.carbs * 4)) <= 10)
+        assertEquals(Macros(150, 60, 190), Norm.targetMacros(Profile(ownKcal = 1900, ownProtein = 150, ownFat = 60, ownCarbs = 190), 80.0))
+    }
 }
