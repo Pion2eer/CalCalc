@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.swipeRight
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.captureScreenRoboImage
@@ -135,12 +136,27 @@ class ScreenshotTest {
     @Test fun diary_empty() = shot("08_diary_empty") { DiaryContent(emptyList(), 2100, today) }
 
     @Composable
-    private fun profile(account: String?, update: UpdateState, sync: SyncStatus = SyncStatus(false, null, false)) = ProfileContent(
-        Profile(true, 1990, 180, -1), 82.5, update, account, null,
+    private fun profile(
+        account: String?, update: UpdateState, sync: SyncStatus = SyncStatus(false, null, false), p: Profile = Profile(true, 1990, 180, -1),
+    ) = ProfileContent(
+        p, 82.5, update, account, null,
         if (account != null) "https://docs.google.com/spreadsheets/d/x" else null,
         "https://script.google.com/macros/s/x/exec", true, "0.1.5",
         { _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {}, sync = sync,
     )
+
+    @Test fun profile_own_norm() = shot("26_profile_own_norm") {
+        profile("pion2er@gmail.com", UpdateState.UpToDate, p = Profile(true, 1990, 180, -1, ownKcal = 1900, ownProtein = 160))
+    }
+
+    /** The button opens the dialog for a norm typed in by hand. */
+    @Test fun own_norm_dialog() = shot("27_own_norm_dialog") {
+        profile("pion2er@gmail.com", UpdateState.UpToDate, p = Profile(true, 1990, 180, -1, ownKcal = 1900, ownProtein = 160))
+    }.also {
+        compose.onNodeWithText("Изменить свою норму").performClick()
+        compose.mainClock.advanceTimeBy(500)
+        captureScreenRoboImage("build/outputs/roborazzi/27_own_norm_dialog.png")
+    }
 
     @Test fun profile_signed_out() = shot("09_profile_signed_out") { profile(null, UpdateState.Idle) }
 

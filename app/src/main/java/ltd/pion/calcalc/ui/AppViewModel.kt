@@ -52,8 +52,8 @@ data class DaySummary(
     val eaten: Int,
     val burned: Int,
     val pending: Int,
-    /** Shares of protein, fat and carbs in the norm, from the questionnaire. */
-    val split: Triple<Double, Double, Double> = Triple(0.2, 0.3, 0.5),
+    /** Grams of protein, fat and carbs per kcal of the norm, so a day with workouts gets them in proportion. */
+    val split: Triple<Double, Double, Double> = Triple(0.2 / 4, 0.3 / 9, 0.5 / 4),
 ) {
     val left get() = norm + burned - eaten
 }
@@ -96,11 +96,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun summarize(list: List<Entry>, p: Profile, w: Double) = DaySummary(
-        norm = Norm.daily(p, w),
+        norm = Norm.target(p, w),
         eaten = list.mapNotNull { it.kcal }.filter { it > 0 }.sum(),
         burned = -list.mapNotNull { it.kcal }.filter { it < 0 }.sum(),
         pending = list.count { it.kcal == null },
-        split = Norm.macros(p, w, Norm.daily(p, w)).shares(),
+        split = Norm.targetMacros(p, w).let { m ->
+            val n = Norm.target(p, w).coerceAtLeast(1).toDouble()
+            Triple(m.protein / n, m.fat / n, m.carbs / n)
+        },
     )
 
     /** Shown instead of «ИИ считает» when food cannot be counted yet, with what to do about it. */

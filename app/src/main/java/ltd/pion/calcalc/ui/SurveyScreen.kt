@@ -135,7 +135,7 @@ fun SurveyContent(
         }
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (i > 0) OutlinedButton(back, Modifier.weight(1f).height(52.dp)) { Text("Назад") }
-            if (step == Step.RESULT) Button({ onSave(p.copy(surveyDone = true)) }, Modifier.weight(1f).height(52.dp)) { Text("Сохранить норму") }
+            if (step == Step.RESULT) Button({ onSave(p.copy(surveyDone = true, ownKcal = null, ownProtein = null, ownFat = null, ownCarbs = null)) }, Modifier.weight(1f).height(52.dp)) { Text("Сохранить норму") }
             else Button({ i++ }, Modifier.weight(1f).height(52.dp)) { Text("Далее") }
         }
     }

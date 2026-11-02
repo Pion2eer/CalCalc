@@ -25,6 +25,11 @@ data class Profile(
     /** 0 usual, 1 fewer carbs, 2 more protein. */
     val diet: Int = 0,
     val surveyDone: Boolean = false,
+    /** A norm the user typed in himself; null means the calculated one. Macros in grams, each may be left empty. */
+    val ownKcal: Int? = null,
+    val ownProtein: Int? = null,
+    val ownFat: Int? = null,
+    val ownCarbs: Int? = null,
 )
 
 object Health {
@@ -51,6 +56,10 @@ class Prefs(context: Context) {
             pregnancy = sp.getInt("pregnancy", 0),
             diet = sp.getInt("diet", 0),
             surveyDone = sp.getBoolean("surveyDone", false),
+            ownKcal = sp.getInt("ownKcal", 0).takeIf { it > 0 },
+            ownProtein = sp.getInt("ownProtein", 0).takeIf { it > 0 },
+            ownFat = sp.getInt("ownFat", 0).takeIf { it > 0 },
+            ownCarbs = sp.getInt("ownCarbs", 0).takeIf { it > 0 },
         )
         set(p) = sp.edit()
             .putBoolean("male", p.male)
@@ -63,6 +72,10 @@ class Prefs(context: Context) {
             .putInt("pregnancy", p.pregnancy)
             .putInt("diet", p.diet)
             .putBoolean("surveyDone", p.surveyDone)
+            .putInt("ownKcal", p.ownKcal ?: 0)
+            .putInt("ownProtein", p.ownProtein ?: 0)
+            .putInt("ownFat", p.ownFat ?: 0)
+            .putInt("ownCarbs", p.ownCarbs ?: 0)
             .apply()
 
     /** Address of the shared AI script; empty means the one built into the app. */

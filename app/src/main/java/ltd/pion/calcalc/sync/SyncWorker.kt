@@ -137,7 +137,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             prefs.sheetId = id
         }
         if (prefs.sheetTidied != id) runCatching { DriveFolder.tidy(token, id) }.onSuccess { prefs.sheetTidied = id }
-        Sheets.mirror(token, id, entries, db.weights().all().first(), Norm.daily(prefs.profile, weight))
+        Sheets.mirror(token, id, entries, db.weights().all().first(), Norm.target(prefs.profile, weight))
         prefs.lastSheetSync = System.currentTimeMillis()
     }
 

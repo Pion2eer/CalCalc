@@ -12,6 +12,8 @@ import ltd.pion.calcalc.sync.StepsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
@@ -149,6 +151,7 @@ fun ProfileContent(
     var url by remember { mutableStateOf(aiUrl) }
     var autoDl by remember { mutableStateOf(autoDownload) }
     var advanced by remember { mutableStateOf(false) }
+    var ownNorm by remember { mutableStateOf(false) }
 
     val draft = p0.copy(male = male, birthYear = year.toIntOrNull() ?: p0.birthYear, heightCm = height.toIntOrNull() ?: p0.heightCm, goal = goal)
     val kg = weight.replace(',', '.').toDoubleOrNull()
@@ -181,9 +184,12 @@ fun ProfileContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Ваша норма", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    val norm = Norm.daily(draft, kg ?: w0)
-                    val m = Norm.macros(draft, kg ?: w0, norm)
+                    Text(
+                        if (draft.ownKcal != null) "Ваша норма, введена вручную" else "Ваша норма",
+                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val norm = Norm.target(draft, kg ?: w0)
+                    val m = Norm.targetMacros(draft, kg ?: w0)
                     Text("$norm ккал в день", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Accent)
                     Text(
                         buildAnnotatedString {
@@ -198,6 +204,9 @@ fun ProfileContent(
                     Text("Тренировки добавляются к ней", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            OutlinedButton({ ownNorm = true }, Modifier.fillMaxWidth().height(48.dp)) {
+                Text(if (p0.ownKcal != null) "Изменить свою норму" else "Ввести свою норму вручную")
+            }
             OutlinedButton(onOpenSurvey, Modifier.fillMaxWidth().height(48.dp)) {
                 Text(if (p0.surveyDone) "Изменить ответы о КБЖУ" else "Уточнить норму КБЖУ")
             }
@@ -209,6 +218,12 @@ fun ProfileContent(
                 Text(if (changed) "Сохранить" else "Сохранено")
             }
         }
+
+        if (ownNorm) OwnNormDialog(
+            draft, Norm.target(draft.copy(ownKcal = null), kg ?: w0),
+            onDismiss = { ownNorm = false },
+            onSave = { own -> ownNorm = false; onSave(own, kg) },
+        )
 
         Section("Аккаунт Google") {
             if (account == null) {
@@ -342,6 +357,47 @@ private fun NumberField(label: String, value: String, modifier: Modifier, decima
         value, { v -> onChange(v.filter { it.isDigit() || (decimal && (it == '.' || it == ',')) }.take(6)) },
         modifier, label = { Text(label, fontSize = 12.sp) }, singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number),
+    )
+}
+
+/** The norm typed in by hand: calories and, if wanted, grams of protein, fat and carbs. */
+@Composable
+private fun OwnNormDialog(p: Profile, calculated: Int, onDismiss: () -> Unit, onSave: (Profile) -> Unit) {
+    var kcal by remember { mutableStateOf(p.ownKcal?.toString() ?: "") }
+    var protein by remember { mutableStateOf(p.ownProtein?.toString() ?: "") }
+    var fat by remember { mutableStateOf(p.ownFat?.toString() ?: "") }
+    var carbs by remember { mutableStateOf(p.ownCarbs?.toString() ?: "") }
+    fun n(v: String) = v.toIntOrNull()?.takeIf { it > 0 }
+    val pr = n(protein); val ft = n(fat); val cb = n(carbs)
+    // with all three macros and no calories, the calories follow from the grams
+    val k = n(kcal) ?: if (pr != null && ft != null && cb != null) pr * 4 + ft * 9 + cb * 4 else null
+    val ok = k != null && k in 800..9000
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Своя норма") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Например, от врача или тренера. Расчёт приложения: $calculated ккал. Пустое поле с БЖУ посчитаем сами.",
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                NumberField("Калории, ккал", kcal, Modifier.fillMaxWidth()) { kcal = it }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NumberField("Белки, г", protein, Modifier.weight(1f)) { protein = it }
+                    NumberField("Жиры, г", fat, Modifier.weight(1f)) { fat = it }
+                    NumberField("Углев., г", carbs, Modifier.weight(1f)) { carbs = it }
+                }
+                if (n(kcal) == null && k != null) Text("Из БЖУ получается $k ккал", fontSize = 13.sp, color = Accent)
+                if (p.ownKcal != null) TextButton(
+                    { onSave(p.copy(ownKcal = null, ownProtein = null, ownFat = null, ownCarbs = null)) },
+                    contentPadding = PaddingValues(0.dp),
+                ) { Text("Вернуть расчёт приложения") }
+            }
+        },
+        confirmButton = {
+            TextButton({ onSave(p.copy(ownKcal = k, ownProtein = pr, ownFat = ft, ownCarbs = cb)) }, enabled = ok) { Text("Сохранить") }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("Отмена") } },
     )
 }
 

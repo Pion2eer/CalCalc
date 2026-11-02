@@ -15,6 +15,16 @@ data class Macros(val protein: Int, val fat: Int, val carbs: Int) {
 }
 
 object Norm {
+    /** The norm in use: the one the user typed in, or the calculated one. */
+    fun target(profile: Profile, weightKg: Double, today: LocalDate = LocalDate.now()): Int =
+        profile.ownKcal ?: daily(profile, weightKg, today)
+
+    /** Macros in use: typed ones win one by one; the rest are calculated for the norm in use. */
+    fun targetMacros(profile: Profile, weightKg: Double, today: LocalDate = LocalDate.now()): Macros {
+        val m = macros(profile, weightKg, target(profile, weightKg, today))
+        return Macros(profile.ownProtein ?: m.protein, profile.ownFat ?: m.fat, profile.ownCarbs ?: m.carbs)
+    }
+
     /** Everyday movement without workouts: sitting, on the feet, physical work. Workouts are added per day. */
     private val activityFactor = listOf(1.2, 1.375, 1.55)
 
