@@ -59,7 +59,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                     break
                 }
                 prefs.aiProblem = when {
-                    a.retry -> a.error ?: "Компьютер с ИИ выключен, записи посчитаются позже"
+                    a.retry -> plain(a.error) ?: "Компьютер с ИИ выключен, записи посчитаются позже"
                     !a.ok && a.error != null && a.error.startsWith("Нет доступа") -> a.error
                     else -> null
                 }
@@ -121,6 +121,14 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                     .put("message", "${ltd.pion.calcalc.BuildConfig.VERSION_NAME}: ${message.take(500)}").toString(),
             )
         }
+    }
+
+    /** The script's reason in words; codes and JSON from an older script become a plain sentence. */
+    private fun plain(error: String?): String? = when {
+        error == null -> null
+        "warming" in error || "загружается" in error -> "ИИ просыпается, посчитаю через минуту"
+        "HTTP" in error || "{" in error -> "ИИ на компьютере сбоит, попробую ещё раз"
+        else -> error
     }
 
     private fun aiText(e: Entry) =

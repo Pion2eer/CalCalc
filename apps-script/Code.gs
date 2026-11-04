@@ -273,14 +273,23 @@ function askPc_(pc, text, image) {
     return { ok: false, retry: true, error: 'Компьютер с ИИ не ответил, попробую ещё раз', detail: String(x).slice(0, 150) };
   }
   var code = r.getResponseCode();
-  if (code !== 200) return { ok: false, retry: code >= 500 || code === 429, error: 'ИИ: HTTP ' + code + ' ' + r.getContentText().slice(0, 150) };
+  if (code !== 200) {
+    // the phone shows words, not codes; the reply itself goes to the journal
+    var body = r.getContentText().slice(0, 150);
+    var warming = code === 503 && body.indexOf('warming') >= 0;
+    return {
+      ok: false, retry: warming || code >= 500 || code === 429, detail: 'HTTP ' + code + ' ' + body,
+      error: warming ? 'ИИ просыпается, посчитаю через минуту' : code === 429 ? 'ИИ занят, посчитаю чуть позже' :
+        code >= 500 ? 'ИИ на компьютере сбоит, попробую ещё раз' : 'ИИ не принял запрос',
+    };
+  }
 
   var a;
   try {
     var msg = JSON.parse(r.getContentText()).message.content;
     a = JSON.parse(msg.slice(msg.indexOf('{'), msg.lastIndexOf('}') + 1));
   } catch (x) {
-    return { ok: false, error: 'ИИ ответил непонятно: ' + r.getContentText().slice(0, 150) };
+    return { ok: false, error: 'ИИ ответил непонятно', detail: r.getContentText().slice(0, 150) };
   }
   if (Array.isArray(a.items) && a.items.length) {
     var sum = function (k) {
