@@ -240,17 +240,65 @@ function parse_(b) {
   if (!text && !image) return { ok: false, error: 'empty' };
   if (!text) text = 'Еда на фото';
 
+  var t0 = Date.now();
   var pc = pc_();
+  var res, via = '';
   if (!pc || !fresh_(pc) || pc.paused) {
     var why = !pc ? 'ПК ни разу не регистрировался' : pc.paused ? 'ИИ на паузе' : 'ПК не на связи ' + Math.round((Date.now() - pc.at) / 60000) + ' мин';
-    log_('parse', email, text + ' → ' + why);
-    return { ok: false, retry: true, error: 'Компьютер с ИИ недоступен' };
+    res = { ok: false, retry: true, error: 'Компьютер с ИИ недоступен', detail: why };
+  } else {
+    res = askPc_(pc, text, image);
   }
-  var t0 = Date.now();
-  var res = askPc_(pc, text, image);
-  log_('parse', email, (image ? '[фото] ' : '') + text + ' → ' + (res.ok ? res.title + ', ' + res.kcal + ' ккал' + (res.question ? ', вопрос: ' + res.question : '') : 'ошибка: ' + res.error + (res.detail ? ' (' + res.detail + ')' : '')), Date.now() - t0);
+  // the PC is off, waking up or failing: the cloud model answers instead, if the owner gave it a key
+  if (!res.ok && res.retry && geminiKey_()) {
+    var g = askGemini_(text, image);
+    via = ' [Gemini' + (g.ok ? '' : ', не вышло') + '; ПК: ' + (res.detail || res.error) + ']';
+    if (g.ok) res = g;
+    else res.detail = (res.detail || '') + '; Gemini: ' + (g.detail || g.error);
+  }
+  log_('parse', email, (image ? '[фото] ' : '') + text + ' → ' + (res.ok ? res.title + ', ' + res.kcal + ' ккал' + (res.question ? ', вопрос: ' + res.question : '') : 'ошибка: ' + res.error + (res.detail ? ' (' + res.detail + ')' : '')) + via, Date.now() - t0);
   delete res.detail;
   return res;
+}
+
+function geminiKey_() { return PropertiesService.getScriptProperties().getProperty('GEMINI_KEY'); }
+
+/** Google's cloud model, the spare for when the PC cannot answer. Model name in GEMINI_MODEL, key in GEMINI_KEY. */
+function askGemini_(text, image) {
+  var props = PropertiesService.getScriptProperties();
+  var model = props.getProperty('GEMINI_MODEL') || 'gemini-2.5-flash';
+  var parts = [{ text: image ? 'На фото еда. Определи продукты и оцени вес каждого по фото. ' + text : text }];
+  if (image) parts.push({ inline_data: { mime_type: 'image/jpeg', data: image } });
+  var r;
+  try {
+    r = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { 'x-goog-api-key': props.getProperty('GEMINI_KEY') },
+      payload: JSON.stringify({
+        systemInstruction: { parts: [{ text: PROMPT }] },
+        contents: [{ role: 'user', parts: parts }],
+        generationConfig: { temperature: 0.2, responseMimeType: 'application/json', maxOutputTokens: 1500 },
+      }),
+    });
+  } catch (x) {
+    return { ok: false, retry: true, error: 'Запасной ИИ не ответил', detail: String(x).slice(0, 150) };
+  }
+  var code = r.getResponseCode();
+  if (code !== 200) return { ok: false, retry: true, error: 'Запасной ИИ не ответил', detail: 'HTTP ' + code + ' ' + r.getContentText().slice(0, 150) };
+  try {
+    var msg = JSON.parse(r.getContentText()).candidates[0].content.parts.map(function (p) { return p.text || ''; }).join('');
+  } catch (x) {
+    return { ok: false, retry: true, error: 'Запасной ИИ ответил непонятно', detail: r.getContentText().slice(0, 150) };
+  }
+  return answer_(msg);
+}
+
+/** Run from the editor: the spare model alone, to check the key. */
+function testGemini() {
+  var t0 = Date.now();
+  var a = askGemini_('гречка с курицей 300 г', null);
+  log_('test', '', '[Gemini] ' + (a.ok ? a.title + ', ' + a.kcal + ' ккал' : 'ошибка: ' + a.error + ' ' + (a.detail || '')), Date.now() - t0);
+  Logger.log(JSON.stringify(a));
 }
 
 function askPc_(pc, text, image) {
@@ -284,12 +332,22 @@ function askPc_(pc, text, image) {
     };
   }
 
-  var a;
+  var msg;
   try {
-    var msg = JSON.parse(r.getContentText()).message.content;
-    a = JSON.parse(msg.slice(msg.indexOf('{'), msg.lastIndexOf('}') + 1));
+    msg = JSON.parse(r.getContentText()).message.content;
   } catch (x) {
     return { ok: false, error: 'ИИ ответил непонятно', detail: r.getContentText().slice(0, 150) };
+  }
+  return answer_(msg);
+}
+
+/** The model's JSON answer, from either model, turned into what the phone gets. */
+function answer_(msg) {
+  var a;
+  try {
+    a = JSON.parse(msg.slice(msg.indexOf('{'), msg.lastIndexOf('}') + 1));
+  } catch (x) {
+    return { ok: false, error: 'ИИ ответил непонятно', detail: String(msg).slice(0, 150) };
   }
   if (Array.isArray(a.items) && a.items.length) {
     var sum = function (k) {
