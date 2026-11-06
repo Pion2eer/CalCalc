@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -162,6 +163,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * it, so a day whose entry got lost comes back. Walking typed in by hand is already inside those steps, so only the
      * rest is added. An entry the user corrected through the steps field is left alone.
      */
+    /** The app came to the screen: food still waiting for the AI is sent at once, not after Android's backoff of hours. */
+    fun resumed() = viewModelScope.launch {
+        if (db.entries().waitingCount().first() > 0) SyncWorker.enqueue(getApplication())
+    }
+
     fun refreshSteps() = viewModelScope.launch {
         val ctx = getApplication<Application>()
         _steps.value = runCatching { Steps.state(ctx) }.getOrDefault(StepsState.UNAVAILABLE)

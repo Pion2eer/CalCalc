@@ -154,6 +154,7 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
     // steps keep coming in during the day: read them again each time the screen is opened
     LifecycleResumeEffect(Unit) {
         vm.refreshSteps()
+        vm.resumed()
         onPauseOrDispose {}
     }
 
