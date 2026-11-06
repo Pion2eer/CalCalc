@@ -266,7 +266,7 @@ function geminiKey_() { return PropertiesService.getScriptProperties().getProper
 /** Google's cloud model, the spare for when the PC cannot answer. Model name in GEMINI_MODEL, key in GEMINI_KEY. */
 function askGemini_(text, image) {
   var props = PropertiesService.getScriptProperties();
-  var model = props.getProperty('GEMINI_MODEL') || 'gemini-2.5-flash';
+  var model = props.getProperty('GEMINI_MODEL') || 'gemini-flash-latest';
   var parts = [{ text: image ? 'На фото еда. Определи продукты и оцени вес каждого по фото. ' + text : text }];
   if (image) parts.push({ inline_data: { mime_type: 'image/jpeg', data: image } });
   var r;
