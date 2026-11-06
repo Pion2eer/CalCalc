@@ -180,22 +180,24 @@ class ScreenshotTest {
 
     /** A long press on a quick button: portions, then «Удалить». */
     @Test fun quick_menu_favorite() = shot("28_quick_menu_favorite") {
-        today(entries, summary, quick = listOf(
+        today(entries.take(3), summary.copy(pending = 0), quick = listOf(
             QuickItem(Template("Сырники 2 шт", "сырники", EntryType.FOOD, 340, 18.0, 14.0, 34.0), true),
             QuickItem(Template("Гречка 200 г", "гречка 200 г", EntryType.FOOD, 220, 8.0, 2.0, 40.0), false),
         ))
     }.also { longPress("Сырники 2 шт", "28_quick_menu_favorite") }
 
     @Test fun quick_menu_frequent() = shot("29_quick_menu_frequent") {
-        today(entries, summary, quick = listOf(
+        today(entries.take(3), summary.copy(pending = 0), quick = listOf(
             QuickItem(Template("Сырники 2 шт", "сырники", EntryType.FOOD, 340, 18.0, 14.0, 34.0), true),
             QuickItem(Template("Гречка 200 г", "гречка 200 г", EntryType.FOOD, 220, 8.0, 2.0, 40.0), false),
         ))
     }.also { longPress("Гречка 200 г", "29_quick_menu_frequent") }
 
     private fun longPress(text: String, name: String) {
+        // nothing spins on this screen, so time may run by itself: a long press needs it to
+        compose.mainClock.autoAdvance = true
         compose.onNodeWithText(text, substring = true).performTouchInput { longClick() }
-        compose.mainClock.advanceTimeBy(800)
+        compose.waitForIdle()
         captureScreenRoboImage("build/outputs/roborazzi/$name.png")
     }
 
