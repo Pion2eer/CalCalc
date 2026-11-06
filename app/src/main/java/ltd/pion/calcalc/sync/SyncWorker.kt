@@ -13,6 +13,7 @@ import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import ltd.pion.calcalc.data.AppDb
 import ltd.pion.calcalc.data.Entry
@@ -32,7 +33,11 @@ import java.util.concurrent.TimeUnit
  */
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
-    override suspend fun doWork(): Result {
+    // the one-time and the periodic sync, or a sync replaced while its request was still out, must not
+    // send the same food twice: one at a time per app
+    override suspend fun doWork(): Result = lock.withLock { work() }
+
+    private suspend fun work(): Result {
         val prefs = Prefs(applicationContext)
         if (prefs.accountEmail == null) return Result.success()
         val token = GoogleAuth.silentToken(applicationContext)
@@ -160,6 +165,8 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     }
 
     companion object {
+        private val lock = kotlinx.coroutines.sync.Mutex()
+
         // A request waiting in its backoff (minutes, later hours) is replaced, so a fresh entry goes to the AI right
         // away; a running one is not cancelled, because that throws away the AI's answer and asks it again
         fun enqueue(context: Context) {

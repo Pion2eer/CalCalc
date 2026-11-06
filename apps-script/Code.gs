@@ -89,6 +89,9 @@ function selfTest() {
   if (pc.paused) return log_('selftest', '', 'ИИ на паузе');
   var t0 = Date.now();
   var a = askPc_(pc, 'яблоко 150 г');
+  // a healthy quick answer lets the phones use the PC again; a failure or a slow one sends them to the spare
+  if (a.ok && Date.now() - t0 < 30000) CacheService.getScriptCache().remove('pcSick');
+  else CacheService.getScriptCache().put('pcSick', '1', 600);
   log_('selftest', '', a.ok ? 'ок: ' + a.title + ', ' + a.kcal + ' ккал' : 'ошибка: ' + a.error, Date.now() - t0);
 }
 
@@ -241,13 +244,27 @@ function parse_(b) {
   if (!text) text = 'Еда на фото';
 
   var t0 = Date.now();
+  var cache = CacheService.getScriptCache();
+  // the same note sent again while the first is still being counted (a phone retrying): one answer for both
+  var key = 'ans:' + Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, email + '|' + text + '|' + (image ? image.length : '')));
+  var cached = cache.get(key);
+  if (cached) {
+    log_('parse', email, text + ' → повтор, ответ из кэша');
+    return JSON.parse(cached);
+  }
   var pc = pc_();
   var res, via = '';
-  if (!pc || !fresh_(pc) || pc.paused) {
+  // the PC failed or answered slowly a moment ago: while that lasts the spare model answers at once,
+  // instead of the phone waiting two minutes for the PC to time out again
+  var pcSick = geminiKey_() && cache.get('pcSick');
+  if (pcSick) {
+    res = { ok: false, retry: true, error: 'Компьютер с ИИ сбоит', detail: 'ПК недавно сбоил, сразу запасной' };
+  } else if (!pc || !fresh_(pc) || pc.paused) {
     var why = !pc ? 'ПК ни разу не регистрировался' : pc.paused ? 'ИИ на паузе' : 'ПК не на связи ' + Math.round((Date.now() - pc.at) / 60000) + ' мин';
     res = { ok: false, retry: true, error: 'Компьютер с ИИ недоступен', detail: why };
   } else {
     res = askPc_(pc, text, image);
+    if ((!res.ok && res.retry) || Date.now() - t0 > 30000) cache.put('pcSick', '1', 600);
   }
   // the PC is off, waking up or failing: the cloud model answers instead, if the owner gave it a key
   if (!res.ok && res.retry && geminiKey_()) {
@@ -258,6 +275,7 @@ function parse_(b) {
   }
   log_('parse', email, (image ? '[фото] ' : '') + text + ' → ' + (res.ok ? res.title + ', ' + res.kcal + ' ккал' + (res.question ? ', вопрос: ' + res.question : '') : 'ошибка: ' + res.error + (res.detail ? ' (' + res.detail + ')' : '')) + via, Date.now() - t0);
   delete res.detail;
+  if (res.ok) cache.put(key, JSON.stringify(res), 600);
   return res;
 }
 
