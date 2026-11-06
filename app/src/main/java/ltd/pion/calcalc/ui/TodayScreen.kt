@@ -164,6 +164,10 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
         onAnswer = { e, o -> vm.answer(e, o) }, onUpdate = vm::downloadAndInstall,
         onAddPhoto = { uri, text -> vm.addPhoto(uri, text) },
         quick = quick, onQuickItem = { q, factor -> vm.repeat(q.template, factor) },
+        onRemoveQuick = { q ->
+            vm.removeQuick(q)
+            android.widget.Toast.makeText(ctx, "«${q.template.title}» убрано из быстрых кнопок", android.widget.Toast.LENGTH_SHORT).show()
+        },
         suggestions = suggestions, onQuery = vm::setQuery,
         onSwipeDelete = { e ->
             vm.delete(e)
@@ -217,6 +221,7 @@ fun TodayContent(
     onAddPhoto: (android.net.Uri, String) -> Unit = { _, _ -> },
     quick: List<QuickItem> = emptyList(),
     onQuickItem: (QuickItem, Double) -> Unit = { _, _ -> },
+    onRemoveQuick: (QuickItem) -> Unit = {},
     suggestions: List<QuickItem> = emptyList(),
     onQuery: (String) -> Unit = {},
     onSwipeDelete: (Entry) -> Unit = {},
@@ -256,6 +261,7 @@ fun TodayContent(
         InputBar(
             input, { input = it }, send, onQuick = onAdd, onPhoto = { uri -> onAddPhoto(uri, input); input = "" },
             quick = chips, onQuickItem = { q, f -> onQuickItem(q, f); if (chips === suggestions) input = "" },
+            onRemoveQuick = if (chips === suggestions) null else onRemoveQuick,
         )
     }
 }
@@ -646,6 +652,7 @@ private fun EmptyHint() {
 private fun InputBar(
     input: String, onInput: (String) -> Unit, onSend: () -> Unit, onQuick: (String) -> Unit, onPhoto: (android.net.Uri) -> Unit,
     quick: List<QuickItem> = emptyList(), onQuickItem: (QuickItem, Double) -> Unit = { _, _ -> },
+    onRemoveQuick: ((QuickItem) -> Unit)? = null,
 ) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
@@ -668,6 +675,14 @@ private fun InputBar(
                                 DropdownMenuItem(
                                     { Text("×${if (f % 1.0 == 0.0) f.toInt() else f} · ${(q.template.kcal * f).roundToInt()} ккал") },
                                     { portions = false; onQuickItem(q, f) },
+                                )
+                            }
+                            if (onRemoveQuick != null) {
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    { Text(if (q.favorite) "Удалить из избранного" else "Удалить из быстрых кнопок", color = Over) },
+                                    { portions = false; onRemoveQuick(q) },
+                                    leadingIcon = { Icon(Icons.Filled.Delete, null, tint = Over) },
                                 )
                             }
                         }

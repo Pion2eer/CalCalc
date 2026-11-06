@@ -134,6 +134,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("profileDone", false)
         set(v) = sp.edit().putBoolean("profileDone", v).apply()
 
+    /** Food the user took off the quick buttons; it no longer comes back as «often eaten». */
+    var hiddenQuick: Set<String>
+        get() = sp.getStringSet("hiddenQuick", emptySet())!!.toSet()
+        set(v) = sp.edit().putStringSet("hiddenQuick", v).apply()
+
     /** Emits on every change, so screens recompute the norm when the profile is edited. */
     fun changes(): Flow<Unit> = callbackFlow {
         val l = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> trySend(Unit) }

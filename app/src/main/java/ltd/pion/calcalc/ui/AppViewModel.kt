@@ -237,14 +237,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Quick buttons: starred food first, then what was eaten often in the last two months. */
     val quick: StateFlow<List<QuickItem>> = combine(
-        favorites, db.entries().frequent(System.currentTimeMillis() - 60L * 24 * 3600 * 1000),
-    ) { favs, often ->
+        favorites, db.entries().frequent(System.currentTimeMillis() - 60L * 24 * 3600 * 1000), prefs.changes(),
+    ) { favs, often, _ ->
         val starred = favs.map { QuickItem(Template(it.title, it.rawText, it.type, it.kcal, it.protein, it.fat, it.carbs), true) }
-        val names = favs.map { it.title }.toSet()
+        val names = favs.map { it.title }.toSet() + prefs.hiddenQuick
         (starred + often.filter { it.title !in names }.map { QuickItem(it, false) }).take(12)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** Long press → «Удалить»: off the star list and no longer offered as often eaten. */
+    fun removeQuick(q: QuickItem) = viewModelScope.launch {
+        if (q.favorite) db.favorites().delete(q.template.title)
+        prefs.hiddenQuick = prefs.hiddenQuick + q.template.title
+    }
+
     fun toggleFavorite(e: Entry) = viewModelScope.launch {
+        prefs.hiddenQuick = prefs.hiddenQuick - e.title
         if (favorites.value.any { it.title == e.title }) db.favorites().delete(e.title)
         else e.kcal?.takeIf { it > 0 }?.let {
             db.favorites().upsert(Favorite(e.title, e.rawText.ifBlank { e.title }, e.type, it, e.protein, e.fat, e.carbs))
