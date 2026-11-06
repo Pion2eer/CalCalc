@@ -265,8 +265,19 @@ function geminiKey_() { return PropertiesService.getScriptProperties().getProper
 
 /** Google's cloud model, the spare for when the PC cannot answer. Model name in GEMINI_MODEL, key in GEMINI_KEY. */
 function askGemini_(text, image) {
+  // Google renames and overloads models: the next one on the list answers when one is busy or gone
+  var models = (PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL') || 'gemini-flash-lite-latest,gemini-flash-latest')
+    .split(',').map(function (m) { return m.trim(); }).filter(String);
+  var res;
+  for (var i = 0; i < models.length; i++) {
+    res = askGeminiModel_(models[i], text, image);
+    if (res.ok || !res.retry) return res;
+  }
+  return res;
+}
+
+function askGeminiModel_(model, text, image) {
   var props = PropertiesService.getScriptProperties();
-  var model = props.getProperty('GEMINI_MODEL') || 'gemini-flash-latest';
   var parts = [{ text: image ? 'На фото еда. Определи продукты и оцени вес каждого по фото. ' + text : text }];
   if (image) parts.push({ inline_data: { mime_type: 'image/jpeg', data: image } });
   var r;
@@ -284,7 +295,7 @@ function askGemini_(text, image) {
     return { ok: false, retry: true, error: 'Запасной ИИ не ответил', detail: String(x).slice(0, 150) };
   }
   var code = r.getResponseCode();
-  if (code !== 200) return { ok: false, retry: true, error: 'Запасной ИИ не ответил', detail: 'HTTP ' + code + ' ' + r.getContentText().slice(0, 150) };
+  if (code !== 200) return { ok: false, retry: true, error: 'Запасной ИИ не ответил', detail: model + ' HTTP ' + code + ' ' + r.getContentText().slice(0, 150) };
   try {
     var msg = JSON.parse(r.getContentText()).candidates[0].content.parts.map(function (p) { return p.text || ''; }).join('');
   } catch (x) {
