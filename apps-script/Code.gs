@@ -312,7 +312,8 @@ function askPc_(pc, text, image) {
       payload: JSON.stringify({
         // gemma4 thinks before answering unless told not to; with thinking a short answer took minutes
         model: pc.model, stream: false, format: 'json', think: false, keep_alive: '24h',
-        options: { temperature: 0.2, num_predict: 500 },
+        // a small context keeps the whole model in the 12 GB card next to browsers; food notes are short
+        options: { temperature: 0.2, num_predict: 500, num_ctx: 4096 },
         messages: [{ role: 'system', content: PROMPT }, user],
       }),
     });
