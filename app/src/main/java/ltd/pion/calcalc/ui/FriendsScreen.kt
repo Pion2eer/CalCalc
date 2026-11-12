@@ -81,7 +81,7 @@ fun FriendsBlock(
             Column(Modifier.padding(12.dp)) {
                 Text("${l.email} приглашает вас: ${kindName(l.family).lowercase()}", fontSize = 15.sp)
                 Text("Вы будете видеть еду друг друга", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button({ onAnswer(l.email, true) }, enabled = !busy) { Text("Принять") }
                     OutlinedButton({ onAnswer(l.email, false) }, enabled = !busy) { Text("Отклонить") }
                 }
@@ -90,7 +90,7 @@ fun FriendsBlock(
     }
     links.filter { it.accepted }.sortedBy { !it.family }.forEach { l ->
         Row(
-            Modifier.fillMaxWidth().clickable { onOpen(l) }.padding(vertical = 6.dp),
+            Modifier.fillMaxWidth().clickable { onOpen(l) }.padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Avatar(l.email)
@@ -130,7 +130,7 @@ fun InviteDialog(onDismiss: () -> Unit, onInvite: (String, Boolean) -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("Пригласить") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     email, { email = it.take(100) }, label = { Text("E-mail в Google") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -191,7 +191,7 @@ fun FriendContent(
             }
         }
         added?.let {
-            Text("Добавлено в сегодня: $it", color = Accent, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+            Text("Добавлено в сегодня: $it", color = Accent, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
         }
         when {
             feed == null -> Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -211,7 +211,7 @@ fun FriendContent(
                             null -> day
                             else -> d.format(dayFmt)
                         }
-                        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 6.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp)) {
                             Text(name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             Text("${list.sumOf { it.kcal }} ккал", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
                         }
@@ -282,9 +282,9 @@ fun PortionDialog(f: FriendFood, onDismiss: () -> Unit, onAdd: (Double) -> Unit)
         onDismissRequest = onDismiss,
         title = { Text(f.title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Сколько вы съели?", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(0.5, 1.0, 1.5, 2.0).forEach { k ->
                         FilterChip(
                             factor == k,

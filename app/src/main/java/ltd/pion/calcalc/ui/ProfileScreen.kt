@@ -180,7 +180,7 @@ fun ProfileContent(
                 FilterChip(goal == 1, { goal = 1 }, { Text("Набрать") })
             }
             Row(
-                Modifier.fillMaxWidth().background(Accent.copy(alpha = 0.10f), RoundedCornerShape(14.dp)).padding(14.dp),
+                Modifier.fillMaxWidth().background(Accent.copy(alpha = 0.10f), RoundedCornerShape(16.dp)).padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
@@ -199,7 +199,7 @@ fun ProfileContent(
                             append("  ·  ")
                             withStyle(SpanStyle(color = Color(0xFFF9A825), fontWeight = FontWeight.SemiBold)) { append("У ${m.carbs} г") }
                         },
-                        fontSize = 14.sp, modifier = Modifier.padding(vertical = 2.dp),
+                        fontSize = 14.sp, modifier = Modifier.padding(vertical = 4.dp),
                     )
                     Text("Тренировки добавляются к ней", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -259,7 +259,7 @@ fun ProfileContent(
             requests.forEach { email ->
                 Column(Modifier.fillMaxWidth()) {
                     Text(email, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button({ onApprove(email, true) }, enabled = !socialBusy) { Text("Одобрить") }
                         OutlinedButton({ onApprove(email, false) }, enabled = !socialBusy) { Text("Отклонить") }
                     }
@@ -344,7 +344,7 @@ fun ProfileContent(
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
     Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = CardShadow) {
-        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             content()
         }

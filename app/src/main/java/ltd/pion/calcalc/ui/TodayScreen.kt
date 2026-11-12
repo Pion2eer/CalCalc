@@ -187,7 +187,7 @@ fun TodayScreen(vm: AppViewModel, modifier: Modifier) {
             remember(d) { vm.dayData(d) }.collectAsState(emptyList<Entry>() to s.copy(eaten = 0, burned = 0, pending = 0)).value
         },
     )
-    SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(bottom = 130.dp))
+    SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(bottom = 128.dp))
     }
 
     editing?.let { e ->
@@ -323,7 +323,7 @@ private fun DayPage(
 
 @Composable
 private fun DayHeader(day: LocalDate, today: LocalDate, onShiftDay: (Long) -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 16.dp, top = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -362,15 +362,15 @@ private fun RoundButton(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 @Composable
 private fun WeekStrip(day: LocalDate, today: LocalDate, onShiftDay: (Long) -> Unit) {
     val monday = day.minusDays(day.dayOfWeek.value - 1L)
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp, end = 8.dp, bottom = 2.dp)) {
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp, end = 8.dp, bottom = 4.dp)) {
         (0..6).map { monday.plusDays(it.toLong()) }.forEach { d ->
             val selected = d == day
             val future = d.isAfter(today)
             Column(
-                Modifier.weight(1f).padding(horizontal = 2.dp).clip(RoundedCornerShape(16.dp))
+                Modifier.weight(1f).padding(horizontal = 4.dp).clip(RoundedCornerShape(16.dp))
                     .background(if (selected) HeroBg else Color.Transparent)
                     .clickable(enabled = !future && !selected) { onShiftDay(ChronoUnit.DAYS.between(day, d)) }
-                    .padding(vertical = 6.dp),
+                    .padding(vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 val c = when {
@@ -384,7 +384,7 @@ private fun WeekStrip(day: LocalDate, today: LocalDate, onShiftDay: (Long) -> Un
                     color = if (selected) Color.White else if (future) c else MaterialTheme.colorScheme.onSurface,
                 )
                 // a dot under today
-                Box(Modifier.padding(top = 3.dp).size(4.dp).clip(CircleShape).background(if (d == today) Accent else Color.Transparent))
+                Box(Modifier.padding(top = 4.dp).size(4.dp).clip(CircleShape).background(if (d == today) Accent else Color.Transparent))
             }
         }
     }
@@ -394,16 +394,16 @@ private fun WeekStrip(day: LocalDate, today: LocalDate, onShiftDay: (Long) -> Un
 private fun SummaryCard(s: DaySummary, entries: List<Entry>, aiBlocker: String?) {
     // the dark accent card of the reference design: the day's main numbers
     Surface(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(28.dp), color = HeroBg, contentColor = Color.White, shadowElevation = CardShadow,
     ) {
-        Column(Modifier.padding(vertical = 14.dp, horizontal = 12.dp)) {
+        Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SideStat("Съедено", s.eaten, Color.White, Modifier.weight(1f))
                 Ring(s)
                 SideStat("Сожжено", s.burned, Color(0xFFFFB74D), Modifier.weight(1f))
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(16.dp))
             val p = entries.sumOf { it.protein ?: 0.0 }
             val f = entries.sumOf { it.fat ?: 0.0 }
             val c = entries.sumOf { it.carbs ?: 0.0 }
@@ -416,11 +416,11 @@ private fun SummaryCard(s: DaySummary, entries: List<Entry>, aiBlocker: String?)
                 Macro("Углеводы", c, budget * sc, Color(0xFFFFD54F), Modifier.weight(1f))
             }
             if (s.pending > 0) Row(
-                Modifier.fillMaxWidth().padding(top = 14.dp),
+                Modifier.fillMaxWidth().padding(top = 16.dp),
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (aiBlocker == null) {
-                    CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Color(0xFFFFD54F))
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color(0xFFFFD54F))
                     Spacer(Modifier.width(8.dp))
                     Text("ИИ считает: ${s.pending} ${plural(s.pending, "запись", "записи", "записей")}", color = Color(0xFFFFD54F), fontSize = 13.sp)
                 } else {
@@ -449,7 +449,7 @@ private fun Ring(s: DaySummary) {
     val over = s.left < 0
     val track = Color.White.copy(alpha = 0.12f)
     val arc = if (over) Over else Color(0xFF3DDC84)
-    Box(Modifier.size(118.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(120.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val w = 10.dp.toPx()
             val box = Size(size.width - w, size.height - w)
@@ -471,7 +471,7 @@ private fun Macro(label: String, grams: Double, goal: Double, color: Color, modi
         Spacer(Modifier.height(4.dp))
         LinearProgressIndicator(
             progress = { (grams / goal.coerceAtLeast(1.0)).toFloat().coerceIn(0f, 1f) },
-            modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+            modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
             color = color, trackColor = Color.White.copy(alpha = 0.12f), drawStopIndicator = {}, gapSize = 0.dp,
         )
         Spacer(Modifier.height(4.dp))
@@ -481,7 +481,7 @@ private fun Macro(label: String, grams: Double, goal: Double, color: Color, modi
 
 @Composable
 private fun SectionTitle(name: String, kcal: Int?, onRepeat: (() -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         if (onRepeat != null) TextButton(onRepeat, contentPadding = PaddingValues(horizontal = 8.dp)) {
             Text("+ в сегодня", fontSize = 13.sp, color = Accent)
@@ -510,7 +510,7 @@ private fun SwipeRow(title: String, onDelete: () -> Unit, onCopy: (() -> Unit)? 
         val copy = v == SwipeToDismissBoxValue.StartToEnd
         val tint = if (copy) Accent else Over
         Row(
-            Modifier.fillMaxWidth().heightIn(min = 60.dp).background(tint.copy(alpha = 0.12f)).padding(start = 14.dp, end = 6.dp),
+            Modifier.fillMaxWidth().heightIn(min = 64.dp).background(tint.copy(alpha = 0.12f)).padding(start = 16.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -529,7 +529,7 @@ private fun SwipeRow(title: String, onDelete: () -> Unit, onCopy: (() -> Unit)? 
         backgroundContent = {
             val copy = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
             Box(
-                Modifier.fillMaxSize().background((if (copy) Accent else Over).copy(alpha = 0.85f)).padding(horizontal = 20.dp),
+                Modifier.fillMaxSize().background((if (copy) Accent else Over).copy(alpha = 0.85f)).padding(horizontal = 24.dp),
                 contentAlignment = if (copy) Alignment.CenterStart else Alignment.CenterEnd,
             ) {
                 if (copy) Icon(Icons.Filled.ContentCopy, "Копировать в сегодня", tint = Color.White)
@@ -544,14 +544,14 @@ private fun EntryRow(e: Entry, waiting: Boolean, onClick: () -> Unit) {
     val k = e.kcal
     val activity = e.type == EntryType.ACTIVITY || (k != null && k < 0)
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 60.dp).padding(horizontal = 14.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val thumb = e.photo?.let { path -> remember(path) { Photos.thumbnail(path, 120) } }
         if (thumb != null) Image(
-            thumb.asImageBitmap(), null, Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop,
+            thumb.asImageBitmap(), null, Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop,
         ) else Box(
-            Modifier.size(36.dp).background((if (activity) Burn else Accent).copy(alpha = 0.15f), CircleShape),
+            Modifier.size(40.dp).background((if (activity) Burn else Accent).copy(alpha = 0.15f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -591,7 +591,7 @@ private fun EntryRow(e: Entry, waiting: Boolean, onClick: () -> Unit) {
         }
         Spacer(Modifier.width(8.dp))
         if (k == null && e.status != EntryStatus.FAILED && !waiting) {
-            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Warn)
+            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Warn)
         } else {
             Text(
                 if (k == null) "—" else if (k < 0) "−${-k}" else "$k",
@@ -609,9 +609,9 @@ private fun QuestionCard(e: Entry, onAnswer: (String) -> Unit, onOpen: () -> Uni
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(16.dp), color = Warn.copy(alpha = 0.10f),
     ) {
-        Column(Modifier.padding(14.dp)) {
+        Column(Modifier.padding(16.dp)) {
             Text(e.rawText, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(e.question.orEmpty(), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 2.dp, bottom = 10.dp))
+            Text(e.question.orEmpty(), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
             val opts = remember(e.options) { parseOptions(e.options) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 opts.forEach { o -> AnswerChip(o, primary = true) { onAnswer(o) } }
@@ -629,18 +629,17 @@ private fun AnswerChip(text: String, primary: Boolean, onClick: () -> Unit) {
         color = if (primary) Accent.copy(alpha = 0.18f) else Color.Transparent,
         border = if (primary) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
-        Text(
-            text, Modifier.heightIn(min = 40.dp).padding(horizontal = 16.dp, vertical = 10.dp),
-            color = if (primary) Accent else MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium,
-        )
+        Box(Modifier.heightIn(min = 40.dp).padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+            Text(text, color = if (primary) Accent else MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        }
     }
 }
 
 @Composable
 private fun EmptyHint() {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Пока пусто", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         Text(
             "Напишите внизу, что съели или чем занимались: «овсянка с бананом», «падел 1 час», «+300».",
             color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp,
@@ -668,7 +667,7 @@ private fun InputBar(
                             (if (q.favorite) "★ " else "") + q.template.title + " · " + q.template.kcal,
                             Modifier.clip(RoundedCornerShape(50)).background(Accent.copy(alpha = 0.15f))
                                 .combinedClickable(onClick = { onQuickItem(q, 1.0) }, onLongClick = { portions = true })
-                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
                             fontSize = 14.sp, maxLines = 1, color = MaterialTheme.colorScheme.onSurface,
                         )
                         DropdownMenu(portions, { portions = false }) {
@@ -695,11 +694,11 @@ private fun InputBar(
                         color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface,
                         shadowElevation = CardShadow / 2,
                     ) {
-                        Text(q, Modifier.padding(horizontal = 14.dp, vertical = 8.dp), fontSize = 14.sp)
+                        Text(q, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 14.sp)
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 // a photo of the plate: the camera app takes it, the words in the field (if any) go along as a hint
                 val camCtx = LocalContext.current
                 val shot = remember { Photos.cameraFile(camCtx) }
@@ -743,7 +742,7 @@ private fun InputBar(
                                 .putExtra(RecognizerIntent.EXTRA_PROMPT, "Что съели или сделали?")
                         ) else onSend()
                     },
-                    Modifier.size(52.dp), enabled = mic || input.isNotBlank(),
+                    Modifier.size(56.dp), enabled = mic || input.isNotBlank(),
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = HeroBg, contentColor = Color.White),
                 ) {
                     if (mic) Icon(Icons.Filled.Mic, "Сказать голосом") else Icon(Icons.AutoMirrored.Filled.Send, "Добавить")
@@ -897,7 +896,7 @@ fun EntryDialog(
                     val f = if (baseGrams != null && newGrams != null) newGrams.toDouble() / baseGrams else 1.0
                     Text("Из чего посчитано", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                     parts.forEach { (n, g, k) ->
-                        Row(Modifier.fillMaxWidth().padding(top = 2.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
                             Text("$n, ${Math.round(g * f)} г", Modifier.weight(1f), fontSize = 14.sp)
                             Text("${Math.round(k * f)} ккал", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }

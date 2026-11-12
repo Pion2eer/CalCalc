@@ -77,12 +77,12 @@ fun SurveyContent(
             Text("${i + 1} из ${steps.size}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         LinearProgressIndicator(
-            { (i + 1f) / steps.size }, Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+            { (i + 1f) / steps.size }, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             color = Accent, trackColor = MaterialTheme.colorScheme.surfaceVariant,
         )
         Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             when (step) {
                 Step.ACTIVITY -> {
@@ -134,9 +134,9 @@ fun SurveyContent(
             }
         }
         Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (i > 0) OutlinedButton(back, Modifier.weight(1f).height(52.dp)) { Text("Назад") }
-            if (step == Step.RESULT) Button({ onSave(p.copy(surveyDone = true, ownKcal = null, ownProtein = null, ownFat = null, ownCarbs = null)) }, Modifier.weight(1f).height(52.dp)) { Text("Сохранить норму") }
-            else Button({ i++ }, Modifier.weight(1f).height(52.dp)) { Text("Далее") }
+            if (i > 0) OutlinedButton(back, Modifier.weight(1f).height(48.dp)) { Text("Назад") }
+            if (step == Step.RESULT) Button({ onSave(p.copy(surveyDone = true, ownKcal = null, ownProtein = null, ownFat = null, ownCarbs = null)) }, Modifier.weight(1f).height(48.dp)) { Text("Сохранить норму") }
+            else Button({ i++ }, Modifier.weight(1f).height(48.dp)) { Text("Далее") }
         }
     }
 }
@@ -151,13 +151,13 @@ private fun Question(title: String, hint: String?) {
 @Composable
 private fun Choice(title: String, hint: String?, selected: Boolean, multi: Boolean = false, onClick: () -> Unit) {
     Surface(
-        onClick, Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
+        onClick, Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
         color = if (selected) Accent.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant,
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Accent else MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (multi) Checkbox(selected, { onClick() }) else RadioButton(selected, onClick)
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 hint?.let { Text(it, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -172,7 +172,7 @@ private fun Result(p: Profile, weightKg: Double) {
     val m = Norm.macros(p, weightKg, kcal)
     Question("Ваша норма", "Тренировки и шаги добавляются к ней каждый день")
     Surface(shape = RoundedCornerShape(24.dp), color = HeroBg, contentColor = Color.White, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("$kcal", fontSize = 40.sp, fontWeight = FontWeight.Bold)
             Text("ккал в день", fontSize = 14.sp, color = HeroMuted)
             Spacer(Modifier.height(16.dp))

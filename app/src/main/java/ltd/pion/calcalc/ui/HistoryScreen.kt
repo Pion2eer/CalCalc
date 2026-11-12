@@ -108,20 +108,20 @@ private fun Event(h: History, today: LocalDate, canRestore: Boolean, onRestore: 
         else -> "Восстановлено" to Accent
     }
     Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = CardShadow) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(Instant.ofEpochMilli(h.at).atZone(zone).toLocalTime().format(timeFmt), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("  $label", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = color, modifier = Modifier.weight(1f))
                 h.kcal?.let { Text(if (it < 0) "−${-it}" else "$it", fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
             }
-            Text(h.title, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+            Text(h.title, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
             // the day the entry belongs to, when it is not the day it was changed
             val day = LocalDate.parse(h.day)
             if (day != Instant.ofEpochMilli(h.at).atZone(zone).toLocalDate()) Text(
                 "в дневнике за " + if (day == today) "сегодня" else day.format(shortDate),
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (canRestore) OutlinedButton(onRestore, Modifier.padding(top = 6.dp)) { Text("Восстановить") }
+            if (canRestore) OutlinedButton(onRestore, Modifier.padding(top = 8.dp)) { Text("Восстановить") }
         }
     }
 }

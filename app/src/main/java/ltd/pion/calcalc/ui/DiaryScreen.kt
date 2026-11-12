@@ -112,7 +112,7 @@ fun DiaryContent(totals: List<DayTotal>, norm: Int, today: LocalDate, modifier: 
 @Composable
 private fun Card(content: @Composable () -> Unit) {
     Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = CardShadow) {
-        Column(Modifier.fillMaxWidth().padding(18.dp)) { content() }
+        Column(Modifier.fillMaxWidth().padding(16.dp)) { content() }
     }
 }
 
@@ -132,7 +132,7 @@ private fun WeekChart(week: List<LocalDate>, byDay: Map<String, DayTotal>, norm:
     val line = MaterialTheme.colorScheme.onSurfaceVariant
     val good = Good
     val bad = Bad
-    Canvas(Modifier.fillMaxWidth().height(140.dp)) {
+    Canvas(Modifier.fillMaxWidth().height(144.dp)) {
         val step = size.width / week.size
         val bw = step * 0.56f
         val r = CornerRadius(bw / 2.5f)
@@ -147,7 +147,7 @@ private fun WeekChart(week: List<LocalDate>, byDay: Map<String, DayTotal>, norm:
         val y = size.height - norm / maxV * size.height
         drawLine(line, Offset(0f, y), Offset(size.width, y), strokeWidth = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 8f)))
     }
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
         week.forEach { d ->
             Text(
                 d.dayOfWeek.getDisplayName(TextStyle.SHORT, ru).replaceFirstChar { it.uppercase() },
@@ -245,7 +245,7 @@ private fun DayRow(t: DayTotal, norm: Int, today: LocalDate) {
             color = if (balance <= 0) Good else Bad,
             modifier = Modifier
                 .background((if (balance <= 0) Good else Bad).copy(alpha = 0.14f), RoundedCornerShape(50))
-                .padding(horizontal = 10.dp, vertical = 4.dp),
+                .padding(horizontal = 12.dp, vertical = 4.dp),
         )
     }
 }
